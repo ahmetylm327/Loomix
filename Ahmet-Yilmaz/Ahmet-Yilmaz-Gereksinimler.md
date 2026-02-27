@@ -49,7 +49,7 @@ Açıklama: Üretilen modellerin ve parça başı dikim maliyetlerinin sisteme g
 #### 10. Üretim Adeti Girme
 ##### API Metodu: POST /production/logs
 
-Açıklama: Tamamlanan ürün miktarlarных model bazında sisteme işleyerek verimlilik takibi yapar.
+Açıklama: Tamamlanan ürün miktarları model bazında sisteme işleyerek verimlilik takibi yapar.
 
 #### 11. Ödeme Kaydı Girme
 ##### API Metodu: POST /payments
