@@ -62,6 +62,6 @@ Açıklama: Tamamlanan ürün miktarlarных model bazında sisteme işleyerek 
  Açıklama: Tarih bazlı hakediş, ödeme ve üretim verilerini analiz raporu olarak sunar.
 
 #### 13. Yapay Zeka Maliyet Tahmini
-##### API Metodu: *GET /ai/forecast*
+##### API Metodu: GET /ai/forecast
 
  Açıklama: Geçmiş verileri analiz ederek gelecek haftanın tahmini personel maliyetlerini öngörür.
