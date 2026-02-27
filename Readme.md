@@ -2,7 +2,7 @@
 
 ## Proje Hakkında
 
-![Loomix Şirket Reklam Kapağı](./Ahmet-Yilmaz/Futuristic%20Loomix%20Corporate%20Dashboard%20Banner.jpg)
+![Loomix Şirket Reklam Kapağı](./Ahmet-Yilmaz/Loomix.png)
 
 
 Proje Tanımı
