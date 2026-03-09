@@ -7,6 +7,8 @@ Aşağıdaki bağlantı üzerinden projemizin OpenAPI 3.0 standartlarındaki tas
 
 ### API Tasarımı İçeriği (YAML Formatı)
 
+```yaml
+
 openapi: 3.0.0
 info:
   title: Loomix API - Fason Takip ve Hakediş Sistemi
