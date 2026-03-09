@@ -1,7 +1,7 @@
 # API Tasarımı
 
 Aşağıdaki bağlantı üzerinden projemizin OpenAPI 3.0 standartlarındaki tasarım dosyasına erişebilirsiniz:
-**YAML Dosya Bağlantısı:** [Loomix API Tasarımı (YAML İndir)](https://github.com/ahmetylm327/Loomix/blob/main/loomix-api.yaml)
+**YAML Dosya Bağlantısı:** [loomix-api.yml](https://github.com/ahmetylm327/Loomix/blob/main/loomix-api.yaml)
 
 ---
 
