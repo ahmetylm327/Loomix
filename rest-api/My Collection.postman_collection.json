@@ -1,0 +1,489 @@
+{
+  "info": {
+    "_postman_id": "629dd962-0414-492b-b8f1-c453cc4ccd63",
+    "name": "My Collection",
+    "description": "### Welcome to Postman! This is your first collection. \n\nCollections are your starting point for building and testing APIs. You can use this one to:\n\n• Group related requests\n• Test your API in real-world scenarios\n• Document and share your requests\n\nUpdate the name and overview whenever you’re ready to make it yours.\n\n[Learn more about Postman Collections.](https://learning.postman.com/docs/collections/collections-overview/)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "53251119",
+    "_collection_link": "https://go.postman.co/collection/53251119-629dd962-0414-492b-b8f1-c453cc4ccd63?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Personel Ekle",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"mikro_id\": \"PER-999\",\r\n    \"fullname\": \"Hasan Usta\",\r\n    \"wage_type\": \"Daily\",\r\n    \"wage_amount\": 500.00,\r\n    \"position\": \"Dikişçi\",\r\n    \"phoneNumber\": \"05559998877\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/employees",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "employees"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Personel Listele",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/employees",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "employees"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Personel Güncelleme",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"fullname\": \"Burak Aslan\",\r\n    \"daily_wage\": 650.00,\r\n    \"position\": \"Ütücü\",\r\n    \"phoneNumber\": \"0987654321\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/employees/:employeeId",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "employees",
+            ":employeeId"
+          ],
+          "variable": [
+            {
+              "key": "employeeId",
+              "value": "69bafbb55dd0786db8ae2a0b"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Personel Silme",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/employees/:employeeId",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "employees",
+            ":employeeId"
+          ],
+          "variable": [
+            {
+              "key": "employeeId",
+              "value": "69bafbb55dd0786db8ae2a0b"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "cariler",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"company_name\": \"Isparta İplik A.Ş.\",\r\n  \"tax_number\": \"1234567890\",\r\n  \"category\": \"Tedarikçi\",\r\n  \"phone\": \"02462111111\",\r\n  \"initial_balance\": 15000.50\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/caris",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "caris"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "kayıt ol",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"kullaniciAdi\": \"ahmetadmin\",\r\n    \"sifre\": \"loomix123\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/kayit",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "kayit"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "giriş yap",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"username\": \"ahmetadmin\",\r\n    \"password\": \"loomix123\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Dosya Yükleme",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "uuid": "60cff3ed-33e6-4c7b-925a-77b21a889492",
+              "src": "/C:/Users/ahmet yılmaz/OneDrive/Masaüstü/a.xlsx"
+            },
+            {
+              "key": "period",
+              "value": "23 mart 2026",
+              "type": "text",
+              "uuid": "7ae4606b-5b78-4322-8873-5b114098166e"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/attendance/upload",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "attendance",
+            "upload"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "maaş hesaplama",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"calculation_date\": \"2026-03-01\",\r\n  \"period_type\": \"Haftalık\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/payroll/:employeeId/calculate",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "payroll",
+            ":employeeId",
+            "calculate"
+          ],
+          "variable": [
+            {
+              "key": "employeeId",
+              "value": "69bafbb55dd0786db8ae2a0b"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Urun",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"product_name\": \"Leke Tutmaz Şef Önlüğü v2\",\r\n    \"unit_price\": 95.00,\r\n    \"modelKodu\": \"TEST-ABC-123\", \r\n    \"cariId\": \"69bb036491e99e3f3d889725\",\r\n    \"category\": \"Tekstil\",\r\n    \"difficulty_level\": 3\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/products",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "products"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Cari Listele",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/caris",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "caris"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Üretim ekle",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"productId\": \"69c0513a6e31bc228049a995\",\r\n  \"quantity\": 1250,\r\n  \"entryType\": \"Günlük\",\r\n  \"productionDate\": \"2026-03-09\",\r\n  \"notes\": \"A Grubu Gündüz Vardiyası\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/production",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "production"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Odeme Ekle",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"transactionType\": \"Gelir\",\r\n  \"paymentType\": \"Havale\",\r\n  \"amount\": 50000.00,\r\n  \"category\": \"Hizmet Bedeli\",\r\n  \"relatedId\": \"69bb036491e99e3f3d889725\",\r\n  \"paymentDate\": \"2026-03-09\",\r\n  \"notes\": \"Mart ayı fason dikim tahsilatı\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/payments",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "payments"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Rapor Alma",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/reports?reportType=production&startDate=2026-03-01&endDate=2026-03-31",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "reports"
+          ],
+          "query": [
+            {
+              "key": "reportType",
+              "value": "production",
+              "type": "text"
+            },
+            {
+              "key": "startDate",
+              "value": "2026-03-01",
+              "type": "text"
+            },
+            {
+              "key": "endDate",
+              "value": "2026-03-31",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "gelişmiş rapor",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"startDate\": \"2026-03-16\",\r\n  \"endDate\": \"2026-03-22\",\r\n  \"includeExpenses\": true, \r\n  \"manualEntries\": [\r\n    {\r\n      \"aciklama\": \"Ahmet Usta'ya elden verilen yol parası\",\r\n      \"tutar\": 1500\r\n    },\r\n    {\r\n      \"aciklama\": \"Atölye çay ve şeker masrafı\",\r\n      \"tutar\": 450\r\n    }\r\n  ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/reports/advanced-payroll",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "reports",
+            "advanced-payroll"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Ai Tahmin",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"forecastPeriod\": \"gelecekAy\",\r\n  \"confidenceLevel\": 95,\r\n  \"includeSeasonality\": true\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/estimates/ai-forecast",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "estimates",
+            "ai-forecast"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": ""
+    }
+  ]
+}
