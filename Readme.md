@@ -39,3 +39,11 @@ Proje dökümantasyonuna aşağıdaki linklerden erişebilirsiniz:
 5. [Mobil Front-End](./Ahmet-Yilmaz/Ahmet-Yilmaz-Mobil-Frontend-Gorevleri.md)
 6. [Mobil Back-End](./Ahmet-Yilmaz/Ahmet-Yilmaz-Mobil-Backend-Gorevleri.md)
 7. [Video Sunum](./Ahmet-Yilmaz/Ahmet-Yilmaz-Sunum.md)
+
+
+## 🔐 Test Giriş Bilgileri (Değerlendirme İçin)
+Hocam, sistemi canlı ortamda test edebilmeniz için tanımlanmış örnek hesap bilgileri aşağıdadır:
+
+* **Giriş Paneli:** [https://loomix-panel.onrender.com](https://loomix-panel.onrender.com)
+* **Kullanıcı Adı:** `ahmet`  
+* **Şifre:** `patron123`     
