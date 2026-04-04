@@ -15,24 +15,28 @@ const personelEkle = async (req, res) => {
         }
         // ------------------------------------------
 
-        const { mikro_id, fullname, wage_type, ucretMiktari, position, phoneNumber } = req.body;
+        // GELEN BÜTÜN VERİLERİ YAKALA (Hem İngilizce hem Türkçe ihtimalleri)
+        const gelenAdSoyad = req.body.fullname || req.body.adSoyad;
+        const gelenUcret = req.body.ucretMiktari || req.body.daily_wage || req.body.birimUcret;
+        const gelenPozisyon = req.body.position || req.body.pozisyon;
+        const gelenTelefon = req.body.phoneNumber || req.body.telefon;
+        const gelenWageType = req.body.wage_type || req.body.ucretTipi;
 
         // Frontend'den gelen wage_type'ı kontrol et
         let ucretTipi = "Günlük";
-        if (wage_type === "Hourly" || wage_type === "Saatlik") {
+        if (gelenWageType === "Hourly" || gelenWageType === "Saatlik") {
             ucretTipi = "Saatlik";
-        } else if (wage_type === "Daily" || wage_type === "Günlük") {
-            ucretTipi = "Günlük";
         }
 
         const yeniPersonel = await Personel.create({
-            mikroId: mikro_id || null, // Bu null gidebilir, sorun yok
-            adSoyad: fullname,
+            mikroId: req.body.mikro_id || null,
+            adSoyad: gelenAdSoyad,
             ucretTipi: ucretTipi,
-            ucretMiktari: ucretMiktari,
-            pozisyon: position,
-            telefon: phoneNumber
+            ucretMiktari: gelenUcret, // Artık ne isimle gelirse gelsin yakalayacak!
+            pozisyon: gelenPozisyon,
+            telefon: gelenTelefon
         });
+
         res.status(201).json({
             empoyeeId: yeniPersonel._id,
             status: "Başarılı"
@@ -45,7 +49,6 @@ const personelEkle = async (req, res) => {
         });
     }
 };
-
 
 const personelListele = async (req, res) => {
     try {
