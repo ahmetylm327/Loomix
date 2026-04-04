@@ -4,6 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 
+
 const ctrlPersonel = require('../controllers/personelController');
 const ctrlMesai = require('../controllers/mesaiController');
 const ctrlAuth = require('../controllers/authController');
@@ -14,6 +15,9 @@ const ctrlOdeme = require('../controllers/odemeController');
 const ctrlRapor = require('../controllers/raporController');
 const ctrlTahmin = require('../controllers/tahminController');
 const ctrlPuantaj = require('../controllers/puantajController');
+
+
+
 
 router.post('/employees', ctrlPersonel.personelEkle);
 router.get('/employees', ctrlPersonel.personelListele);
@@ -45,5 +49,4 @@ router.post('/auth/login', ctrlAuth.girisYap);
 router.post('/estimates/ai-forecast', ctrlTahmin.tahminYap);
 router.post('/puantaj/yukle', ctrlPuantaj.puantajYukle);
 router.get('/stats', ctrlPersonel.getDashboardStats);
-
 module.exports = router;
