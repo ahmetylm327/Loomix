@@ -3,29 +3,28 @@ const Cari = mongoose.model('Cari');
 
 const cariEkle = async (req, res) => {
     try {
-        console.log("1. Backend'e Ulaşan Veri:", req.body);
+        const { company_name, tax_number, category, phone, initial_balance } = req.body;
+        if (!company_name || !tax_number || !category) {
+            return res.status(400).json({ description: "Geçersiz Veri (Eksik Vergi No, İsim veya Kategori" });
+        }
+        if (tax_number.length !== 10) {
+            return res.status(400).json({ description: "Vegi numarası tam olarak 10 haneli olmalıdır." });
+        }
 
-        // Verileri Mongoose'un kesinlikle kabul edeceği formata ZORLUYORUZ
-        const firmaKaydi = {
-            firmaAdi: String(req.body.company_name),
-            vergiNo: String(req.body.tax_number),
-            kategori: String(req.body.category),
-            telefon: String(req.body.phone || ""),
-            bakiye: 0
-        };
+        const yeniCari = await Cari.create({
+            firmaAdi: company_name,
+            vergiNo: tax_number,
+            kategori: category,
+            telefon: phone,
+            bakiye: initial_balance || 0
+        });
 
-        console.log("2. Veritabanına Gönderilen Format:", firmaKaydi);
-
-        // Veritabanına kaydet
-        const yeniCari = await Cari.create(firmaKaydi);
-
-        console.log("3. ✅ KAYIT BAŞARILI!");
-        res.status(201).json({ cariId: yeniCari._id, status: "Kayıt Oluşturuldu" });
-
+        res.status(201).json({
+            cariId: yeniCari._id,
+            status: "Kayıt Oluşturuldu"
+        });
     } catch (hata) {
-        // EĞER HATA OLURSA ARTIK KONSOLDA BAĞIRACAK!
-        console.error("🚨 VERİTABANI HATASI:", hata.message);
-        res.status(400).json({ description: hata.message });
+        res.status(400).json({ description: "Geçersiz Veri Formatı", detay: hata.message });
     }
 };
 
@@ -34,38 +33,8 @@ const cariListele = async (req, res) => {
         const cariler = await Cari.find();
         res.status(200).json(cariler);
     } catch (hata) {
-        res.status(500).json({ mesaj: "Firmalar getirilemedi" });
+        res.status(500).json({ mesaj: "Firmalar getirilemedi: " + hata.message });
     }
 };
 
-const cariGuncelle = async (req, res) => {
-    try {
-        const id = req.params.id;
-        const guncelCari = await Cari.findByIdAndUpdate(id, req.body, { new: true });
-
-        if (!guncelCari) {
-            return res.status(404).json({ mesaj: "Firma bulunamadı." });
-        }
-        res.status(200).json(guncelCari);
-    } catch (hata) {
-        res.status(400).json({ mesaj: "Firma güncellenemedi", detay: hata.message });
-    }
-};
-
-const cariSil = async (req, res) => {
-    try {
-        const id = req.params.id;
-        const silinenCari = await Cari.findByIdAndDelete(id);
-
-        if (!silinenCari) {
-            return res.status(404).json({ mesaj: "Firma bulunamadı." });
-        }
-        res.status(204).send();
-    } catch (hata) {
-        res.status(400).json({ mesaj: "Firma silinemedi", detay: hata.message });
-    }
-};
-
-
-
-module.exports = { cariEkle, cariListele, cariGuncelle, cariSil };
+module.exports = { cariEkle, cariListele };

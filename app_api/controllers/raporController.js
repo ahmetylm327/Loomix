@@ -23,7 +23,6 @@ const raporAl = async (req, res) => {
             reportTitle: `${startDate} - ${endDate} Tarihleri Arası ${reportType} Raporu`,
         };
 
-
         if (reportType === 'Finans' || reportType === 'Genel') {
             const odemeler = await Odeme.find({ odemeTarihi: { $gte: baslangic, $lte: bitis } });
 
@@ -43,29 +42,18 @@ const raporAl = async (req, res) => {
         }
 
         if (reportType === 'Performans' || reportType === 'Genel') {
-            // Hem Türkçe hem İngilizce ihtimaline karşı iki tarihi de arıyoruz
-            const uretimler = await Uretim.find({
-                $or: [
-                    { uretimTarihi: { $gte: baslangic, $lte: bitis } },
-                    { productionDate: { $gte: baslangic, $lte: bitis } }
-                ]
-            }).populate({ path: 'urunId', strictPopulate: false })
-                .populate({ path: 'productId', strictPopulate: false });
+            const uretimler = await Uretim.find({ uretimTarihi: { $gte: baslangic, $lte: bitis } }).populate('urunId');
 
             let totalItemsProduced = 0;
             let urunSayaclari = {};
 
             uretimler.forEach(uretim => {
-                // Adet veya quantity (Hangisi varsa onu al)
-                const miktar = Number(uretim.adet || uretim.quantity || 0);
-                totalItemsProduced += miktar;
+                totalItemsProduced += uretim.adet;
 
-                // urunId veya productId (Hangisi varsa onu al)
-                const urun = uretim.urunId || uretim.productId;
-                if (urun && (urun.urunAdi || urun.product_name)) {
-                    const ad = urun.urunAdi || urun.product_name;
+                if (uretim.urunId && uretim.urunId.urunAdi) {
+                    const ad = uretim.urunId.urunAdi;
                     if (!urunSayaclari[ad]) urunSayaclari[ad] = 0;
-                    urunSayaclari[ad] += miktar;
+                    urunSayaclari[ad] += uretim.adet;
                 }
             });
 
@@ -80,7 +68,7 @@ const raporAl = async (req, res) => {
 
             responseData.productionData = {
                 totalItemsProduced: totalItemsProduced,
-                mostProducedProduct: mostProducedProduct // Büyük 'P' ile gönderiyoruz
+                mostProducedProduct: mostProducedProduct
             };
         }
 
@@ -89,6 +77,7 @@ const raporAl = async (req, res) => {
         res.status(400).json({ description: "Geçersiz Veri Formatı", detay: hata.message });
     }
 };
+
 const gelismisBordroRaporu = async (req, res) => {
     try {
         const { startDate, endDate, includeExpenses, manuelEntries } = req.body;

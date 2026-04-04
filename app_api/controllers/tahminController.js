@@ -16,8 +16,7 @@ const tahminYap = async (req, res) => {
             return res.status(422).json({ error: "Analiz için son 4 haftaya ait üretim verisi eksik" });
         }
 
-        // HATA BURADAYDI: urunId yerine bizim bugün yazdığımız productId'yi populate ediyoruz
-        const tumUretimler = await Uretim.find().populate('productId');
+        const tumUretimler = await Uretim.find().populate('urunId');
         const tumGiderler = await Odeme.find({ islemYonu: 'Gider' });
 
         let gecmisToplamUretim = 0;
@@ -26,23 +25,22 @@ const tahminYap = async (req, res) => {
         let toplamZorlukSkoru = 0;
         let aylikUretimGecmisi = {};
 
-        // AKILLI DÖNGÜ: Hem İngilizce (yeni) hem Türkçe (eski) alanları okur
+        // DÖNGÜ BAŞLIYOR (Buradaki u.adet kullanımları çok kritik!)
         tumUretimler.forEach(u => {
-            const mevcutAdet = u.quantity || u.adet || 0;
+            const mevcutAdet = u.adet || 0; // Eğer veritabanında adet boş girilmişse 0 kabul et
             gecmisToplamUretim += mevcutAdet;
 
-            const tarih = u.productionDate || u.uretimTarihi;
-            if (tarih) {
-                const ay = new Date(tarih).getMonth();
+            if (u.uretimTarihi) {
+                const ay = new Date(u.uretimTarihi).getMonth();
                 aylikUretimGecmisi[ay] = (aylikUretimGecmisi[ay] || 0) + mevcutAdet;
             }
 
-            const urun = u.productId || u.urunId;
-            if (urun) {
-                const fiyat = urun.unit_price || urun.birimFiyat || 0;
-                gecmisToplamCiro += (mevcutAdet * fiyat);
+            if (u.urunId) {
+                if (u.urunId.birimFiyat) {
+                    gecmisToplamCiro += (mevcutAdet * u.urunId.birimFiyat);
+                }
 
-                let zorluk = urun.difficulty_level || urun.zorlukDerecesi || 3;
+                let zorluk = u.urunId.zorlukDerecesi || 3;
                 if (typeof zorluk === 'string') {
                     const z = zorluk.toLowerCase();
                     if (z.includes('kolay')) zorluk = 1;
@@ -55,7 +53,7 @@ const tahminYap = async (req, res) => {
             }
         });
 
-        tumGiderler.forEach(g => gecmisToplamGider += g.tutar || g.amount || 0);
+        tumGiderler.forEach(g => gecmisToplamGider += g.tutar);
 
         let ortalamaZorluk = gecmisToplamUretim > 0 ? (toplamZorlukSkoru / gecmisToplamUretim) : 3;
         let zorlukCarpani = 1;
