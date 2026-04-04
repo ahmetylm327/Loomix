@@ -17,9 +17,9 @@ Referans Uygulama:
 [Mikro Yazılım - Personel Yönetimi](https://www.mikro.com.tr/)
 
 ## Proje Linkleri
-REST API Adresi: Geliştirme aşamasında (Yakında)
+REST API Adresi: https://loomix-xlp4.onrender.com
 
-Web Frontend Adresi: Geliştirme aşamasında (Yakında)
+Web Frontend Adresi: https://loomix-panel.onrender.com
 
 ## Proje Ekibi
 Grup Adı: Anyone

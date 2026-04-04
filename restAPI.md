@@ -9,8 +9,7 @@ Bu doküman, Loomix ERP projesinin Render üzerinde çalışan canlı API servis
 > Örn: `https://loomix-xlp4.onrender.com/api/employees`
 
 ## 🎥 YouTube Kanıt Videosu
-**Video Linki:** [BURAYA YOUTUBE LİNKİNİ YAPIŞTIR]
-*(Videoda sistemin canlı ortamda çalıştığı, Postman testleri ve veritabanı bağlantısı kanıtlanmıştır.)*
+**Video Linki:** https://youtu.be/yV_fmL7-VrE
 
 ## 🛠️ Kullanılan Teknolojiler
 * **Runtime:** Node.js & Express.js
