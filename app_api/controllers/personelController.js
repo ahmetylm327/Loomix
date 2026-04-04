@@ -15,7 +15,7 @@ const personelEkle = async (req, res) => {
         }
         // ------------------------------------------
 
-        const { mikro_id, fullname, wage_type, wage_amount, position, phoneNumber } = req.body;
+        const { mikro_id, fullname, wage_type, ucretMiktari, position, phoneNumber } = req.body;
 
         // Frontend'den gelen wage_type'ı kontrol et
         let ucretTipi = "Günlük";
@@ -29,7 +29,7 @@ const personelEkle = async (req, res) => {
             mikroId: mikro_id || null, // Bu null gidebilir, sorun yok
             adSoyad: fullname,
             ucretTipi: ucretTipi,
-            ucretMiktari: wage_amount,
+            ucretMiktari: ucretMiktari,
             pozisyon: position,
             telefon: phoneNumber
         });
