@@ -1,2 +1,2 @@
-const BASE_URL = "https://loomix-xlp4.onrender.com";
+const BASE_URL = "https://loomix-backend.onrender.com";
 export default BASE_URL;
