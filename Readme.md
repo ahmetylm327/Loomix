@@ -34,8 +34,8 @@ Proje dökümantasyonuna aşağıdaki linklerden erişebilirsiniz:
 
 1. [Gereksinim Analizi](./Ahmet-Yilmaz/Ahmet-Yilmaz-Gereksinimler.md)
 2. [REST API Tasarımı](./Ahmet-Yilmaz/Ahmet-Yilmaz-REST-API-Tasarimi.md)
-3. [REST API](./Ahmet-Yilmaz/Ahmet-Yilmaz-Rest-API-Gorevleri.md)
-4. [Web Front-End](./Ahmet-Yilmaz/Ahmet-Yilmaz-Web-Frontend-Gorevleri.md)
+3. [REST API](./rest-api/)
+4. [Web Front-End](./loomix-frontend/)
 5. [Mobil Front-End](./Ahmet-Yilmaz/Ahmet-Yilmaz-Mobil-Frontend-Gorevleri.md)
 6. [Mobil Back-End](./Ahmet-Yilmaz/Ahmet-Yilmaz-Mobil-Backend-Gorevleri.md)
 7. [Video Sunum](./Ahmet-Yilmaz/Ahmet-Yilmaz-Sunum.md)
