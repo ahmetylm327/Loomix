@@ -7,10 +7,7 @@ const app = express();
 
 // 🛡️ CORS Ayarı (Canlıda sorun çıkmaması için)
 app.use(cors());
-app.use(cors({
-    origin: 'https://loomix-frontend.onrender.com', // Frontend linkini buraya yaz
-    credentials: true
-}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
