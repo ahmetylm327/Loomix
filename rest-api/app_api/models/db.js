@@ -1,18 +1,22 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-const dbURI = process.env.MONGODB_URI;
+// İsim uyuşmazlığını önlemek için her iki ihtimali de kontrol edelim
+const dbURI = process.env.MONGODB_URI || process.env.MONGO_URI;
 
-mongoose.connect(dbURI);
+if (!dbURI) {
+    console.error("❌ HATA: MONGO_URI bulunamadı! Render panelinden Environment Variables kısmını kontrol et.");
+}
 
-mongoose.connection.on('connected', () => {
-    console.log('Mongoose veritabanına başarıyla bağlandı.');
-});
+mongoose.connect(dbURI)
+    .then(() => {
+        console.log('🚀 Mongoose veritabanına başarıyla bağlandı.');
+    })
+    .catch((err) => {
+        console.error('❌ Mongoose bağlantı hatası: ' + err.message);
+    });
 
-mongoose.connection.on('error', (err) => {
-    console.log('Mongoose bağlantı hatası: ' + err);
-});
-
+// Modellerini çağırmaya devam et
 require('./personel');
 require('./mesai');
 require('./odeme');
