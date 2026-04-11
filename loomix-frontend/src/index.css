@@ -1,0 +1,30 @@
+/* index.css içine bunları yapıştır */
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100% !important;
+  /* Genişliği zorla %100 yapıyoruz */
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  /* Yatayda kaydırma çubuğu çıkmasını engeller */
+}
+
+/* Ant Design'ın ana kapsayıcısını genişletiyoruz */
+.ant-layout {
+  min-height: 100vh;
+  width: 100% !important;
+  display: flex;
+}
+
+/* Eğer içeriğin bir 'Container' içindeyse onu serbest bırakalım */
+.ant-layout-content {
+  width: 100% !important;
+  max-width: none !important;
+  /* Eğer bir yerde max-width: 1200px kaldıysa onu iptal eder */
+  margin: 0 !important;
+  padding: 24px;
+  /* Sadece içten biraz nefes alsın yeter */
+}

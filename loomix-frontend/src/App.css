@@ -1,0 +1,33 @@
+/* 1. TÜM GİZLİ BOŞLUKLARI SIFIRLA */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow-x: hidden;
+  /* Arka planı koyu yapalım ki hiçbir yerde beyaz sızıntı kalmasın */
+  background-color: #001529 !important;
+}
+
+/* 2. ANT DESIGN LAYOUT'U EKRANA YAY */
+.ant-layout {
+  width: 100% !important;
+  min-height: 100vh !important;
+}
+
+/* 3. İÇERİK ALANININ TASARIMINI BOZAN VITE ARTIKLARINI TEMİZLE */
+.ant-layout-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  /* Flexbox'ı iptal et, sayfaların bozulmasın */
+}
