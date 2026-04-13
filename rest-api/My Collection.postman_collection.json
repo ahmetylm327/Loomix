@@ -23,7 +23,7 @@
           }
         },
         "url": {
-          "raw": "{{base_url}}/api/personeller",
+          "raw": "{{base_url}}/api/employees",
           "host": [
             "{{base_url}}"
           ],
@@ -41,7 +41,7 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/api/personeller",
+          "raw": "{{base_url}}/api/employees",
           "host": [
             "{{base_url}}"
           ],
@@ -68,7 +68,7 @@
           }
         },
         "url": {
-          "raw": "{{base_url}}/api/personeller/:employeeId",
+          "raw": "{{base_url}}/api/employees/employee:id",
           "host": [
             "{{base_url}}"
           ],
@@ -93,7 +93,7 @@
         "method": "DELETE",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/api/personeller/:employeeId",
+          "raw": "{{base_url}}/api/employee/:employeeId",
           "host": [
             "{{base_url}}"
           ],
@@ -127,7 +127,7 @@
           }
         },
         "url": {
-          "raw": "{{base_url}}/api/cariler",
+          "raw": "{{base_url}}/api/caris",
           "host": [
             "{{base_url}}"
           ],
@@ -280,7 +280,7 @@
           }
         },
         "url": {
-          "raw": "{{base_url}}/api/urunler",
+          "raw": "{{base_url}}/api/products",
           "host": [
             "{{base_url}}"
           ],
@@ -298,7 +298,7 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/api/cariler",
+          "raw": "{{base_url}}/api/caris",
           "host": [
             "{{base_url}}"
           ],
@@ -325,7 +325,7 @@
           }
         },
         "url": {
-          "raw": "{{base_url}}/api/uretim",
+          "raw": "{{base_url}}/api/production",
           "host": [
             "{{base_url}}"
           ],
@@ -352,7 +352,7 @@
           }
         },
         "url": {
-          "raw": "{{base_url}}/api/odemeler",
+          "raw": "{{base_url}}/api/payments",
           "host": [
             "{{base_url}}"
           ],

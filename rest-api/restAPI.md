@@ -6,7 +6,7 @@ Bu doküman, Loomix ERP projesinin Render üzerinde çalışan canlı API servis
 **Canlı Sistem Linki:** https://loomix-xlp4.onrender.com
 
 > **Not:** API istekleri için temel dizin (Base URL) `/api` ekini kullanmaktadır. 
-> Örn: `https://loomix-xlp4.onrender.com/api/personeller`
+> Örn: `https://loomix-xlp4.onrender.com/api/employee`
 
 ## 🎥 YouTube Kanıt Videosu
 **Video Linki:** https://youtu.be/yV_fmL7-VrE
@@ -24,14 +24,14 @@ Bu doküman, Loomix ERP projesinin Render üzerinde çalışan canlı API servis
   - *Girdi:* `{ "username", "password" }` -> *Çıktı:* `Token`
 
 ### 2. Personel Yönetimi (CRUD)
-- **Listeleme (GET):** `/api/personeller`
-- **Ekleme (POST):** `/api//personeller`
-- **Güncelleme (PUT):** `/api/personeller/:employeeId`
-- **Silme (DELETE):** `/api//personeller/:employeeId`
+- **Listeleme (GET):** `/api/employee`
+- **Ekleme (POST):** `/api/employee`
+- **Güncelleme (PUT):** `/api/employee/:employeeId`
+- **Silme (DELETE):** `/api//employee/:employeeId`
 
 ### 3. Üretim ve Stok Modülü
-- **Üretim Kaydı (POST):** `/api/uretim`
-- **Ürün Tanımlama (POST):** `/api/urunler`
+- **Üretim Kaydı (POST):** `/api/production`
+- **Ürün Tanımlama (POST):** `/api/products`
 
 ### 4. Yapay Zeka Destekli Tahmin & Raporlama
 - **AI Tahmin Motoru (POST):** `/api/estimates/ai-forecast`
