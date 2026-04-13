@@ -4,7 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 
-
+// --- CONTROLLER BAĞLANTILARI ---
 const ctrlPersonel = require('../controllers/personelController');
 const ctrlMesai = require('../controllers/mesaiController');
 const ctrlAuth = require('../controllers/authController');
@@ -17,39 +17,56 @@ const ctrlTahmin = require('../controllers/tahminController');
 const ctrlPuantaj = require('../controllers/puantajController');
 const ctrlStats = require('../controllers/statsController');
 
+// ==========================================
+// ROTALAR (FRONTEND İLE UYUMLU TÜRKÇE İSİMLER)
+// ==========================================
 
+// --- PERSONEL YÖNETİMİ ---
+router.post('/personeller', ctrlPersonel.personelEkle);
+router.get('/personeller', ctrlPersonel.personelListele);
+router.put('/personeller/:employeeId', ctrlPersonel.personelGuncelle);
+router.delete('/personeller/:employeeId', ctrlPersonel.personelSil);
+router.post('/personeller/:employeeId/pay', ctrlPersonel.personelOdemeYap);
 
+// --- ÜRETİM YÖNETİMİ ---
+router.post('/uretim', ctrlUretim.uretimEkle);
+router.get('/uretim', ctrlUretim.uretimListele);
+router.put('/uretim/:id', ctrlUretim.uretimGuncelle);
+router.delete('/uretim/:id', ctrlUretim.uretimSil);
 
-router.post('/employees', ctrlPersonel.personelEkle);
-router.get('/employees', ctrlPersonel.personelListele);
-router.put('/employees/:employeeId', ctrlPersonel.personelGuncelle);
-router.delete('/employees/:employeeId', ctrlPersonel.personelSil);
-router.post('/employees/:employeeId/pay', ctrlPersonel.personelOdemeYap);
-router.post('/attendance/upload', upload.single('file'), ctrlMesai.mesaiYukle);
-router.post('/payroll/:employeeId/calculate', ctrlMesai.hakedisHesapla);
-router.post('/production', ctrlUretim.uretimEkle);
-router.get('/production', ctrlUretim.uretimListele);
-router.put('/production/:id', ctrlUretim.uretimGuncelle);
-router.delete('/production/:id', ctrlUretim.uretimSil);
-router.post('/caris', ctrlCari.cariEkle);
-router.get('/caris', ctrlCari.cariListele);
-router.put('/caris/:id', ctrlCari.cariGuncelle);
-router.delete('/caris/:id', ctrlCari.cariSil);
-router.post('/products', ctrlUrun.urunEkle);
-router.get('/products', ctrlUrun.urunleriListele);
-router.put('/products/:id', ctrlUrun.urunGuncelle);
-router.delete('/products/:id', ctrlUrun.urunSil);
-router.post('/payments', ctrlOdeme.odemeEkle);
-router.get('/payments', ctrlOdeme.odemeListele);
-router.put('/payments/:id', ctrlOdeme.odemeGuncelle);
-router.delete('/payments/:id', ctrlOdeme.odemeSil);
-router.get('/reports', ctrlRapor.raporAl);
-router.post('/reports/advanced-payroll', ctrlRapor.gelismisBordroRaporu);
+// --- ÜRÜN YÖNETİMİ ---
+router.post('/urunler', ctrlUrun.urunEkle);
+router.get('/urunler', ctrlUrun.urunleriListele);
+router.put('/urunler/:id', ctrlUrun.urunGuncelle);
+router.delete('/urunler/:id', ctrlUrun.urunSil);
+
+// --- ÖDEME YÖNETİMİ ---
+router.post('/odemeler', ctrlOdeme.odemeEkle);
+router.get('/odemeler', ctrlOdeme.odemeListele);
+router.put('/odemeler/:id', ctrlOdeme.odemeGuncelle);
+router.delete('/odemeler/:id', ctrlOdeme.odemeSil);
+
+// --- CARİ YÖNETİMİ ---
+router.post('/cariler', ctrlCari.cariEkle);
+router.get('/cariler', ctrlCari.cariListele);
+router.put('/cariler/:id', ctrlCari.cariGuncelle);
+router.delete('/cariler/:id', ctrlCari.cariSil);
+router.get('/cariler/:id/ekstre', ctrlCari.getCariEkstre);
+
+// --- KULLANICI / GİRİŞ (AUTH) ---
 router.post('/kayit', ctrlAuth.kayitOl);
 router.post('/auth/login', ctrlAuth.girisYap);
+
+// --- DİĞER İŞLEMLER (MESAİ, RAPOR, İSTATİSTİK) ---
+// Not: Bu kısımlar frontend'de nasıl çağrılıyorsa o şekilde kalmalı.
+router.post('/attendance/upload', upload.single('file'), ctrlMesai.mesaiYukle);
+router.post('/payroll/:employeeId/calculate', ctrlMesai.hakedisHesapla);
+router.get('/reports', ctrlRapor.raporAl);
+router.post('/reports/advanced-payroll', ctrlRapor.gelismisBordroRaporu);
 router.post('/estimates/ai-forecast', ctrlTahmin.tahminYap);
 router.post('/puantaj/yukle', ctrlPuantaj.puantajYukle);
-router.get('/stats', ctrlPersonel.getDashboardStats);
-router.get('/caris/:id/ekstre', ctrlCari.getCariEkstre);
+
+// İstatistikler (Duplicate silindi, tek ve doğru olan bırakıldı)
 router.get('/stats', ctrlStats.getDashboardStats);
+
 module.exports = router;
