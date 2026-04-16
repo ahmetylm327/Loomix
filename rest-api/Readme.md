@@ -19,7 +19,7 @@ Referans Uygulama:
 ## Proje Linkleri
 REST API Adresi: https://loomix-xlp4.onrender.com
 
-Web Frontend Adresi: https://loomix-panel.onrender.com
+Web Frontend Adresi: https://loomix-two.vercel.app
 
 ## Proje Ekibi
 Grup Adı: Anyone

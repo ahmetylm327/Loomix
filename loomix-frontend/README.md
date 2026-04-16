@@ -4,7 +4,7 @@ Loomix, işletmelerin personel, üretim ve stok süreçlerini dijitalleştirmek 
 
 ## 🌐 Canlı Uygulama
 Uygulamaya şu adresten ulaşabilirsiniz: 
-👉 [https://loomix-panel.onrender.com](https://loomix-panel.onrender.com)
+👉 [https://loomix-two.vercel.app/](https://loomix-two.vercel.app/)
 
 ## ✨ Öne Çıkan Özellikler
 - **Personel Yönetimi (CRUD):** Personel ekleme, silme ve güncelleme işlemleri.
@@ -31,6 +31,6 @@ Projeyi yerel ortamınızda çalıştırmak için:
 ## 🔐 Test Giriş Bilgileri (Değerlendirme İçin)
 Hocam, sistemi canlı ortamda test edebilmeniz için tanımlanmış örnek hesap bilgileri aşağıdadır:
 
-* **Giriş Paneli:** [https://loomix-panel.onrender.com](https://loomix-panel.onrender.com)
+* **Giriş Paneli:** [https://loomix-two.vercel.app/](https://loomix-panel.onrender.com)
 * **Kullanıcı Adı:** `ahmet`  
 * **Şifre:** `patron123`        
