@@ -7,7 +7,7 @@ const app = express();
 
 // 🛡️ CORS Ayarı (Sadece Vercel frontend'ine izin verir)
 app.use(cors({
-    origin: 'https://loomix-two.vercel.app/', // ÖRNEK: 'https://loomix-frontend-abc.vercel.app'
+    origin: 'https://loomix-two.vercel.app', // ÖRNEK: 'https://loomix-frontend-abc.vercel.app'
     credentials: true
 }));
 
