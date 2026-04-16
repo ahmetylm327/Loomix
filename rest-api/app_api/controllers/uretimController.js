@@ -4,7 +4,6 @@ const Urun = mongoose.model('Urun');
 
 const uretimEkle = async (req, res) => {
     try {
-        // 1. DEĞİŞİKLİK: periyot değişkenini de karşıla
         const { productId, quantity, entryType, productionDate, notes, periyot } = req.body;
 
         const urunVarMi = await Urun.findById(productId);
@@ -15,10 +14,10 @@ const uretimEkle = async (req, res) => {
         const yeniUretim = new Uretim({
             productId,
             quantity,
-            entryType,
+            // 🚀 İŞTE DÜZELTİLEN SATIR: Artık boş gelirse otomatik "Üretim" yazacak
+            entryType: entryType || "Üretim",
             productionDate,
             notes,
-            // 2. DEĞİŞİKLİK: Frontend boş gönderse bile otomatik "Günlük" kaydet
             periyot: periyot || "Günlük"
         });
 
@@ -46,7 +45,6 @@ const uretimListele = async (req, res) => {
 const uretimGuncelle = async (req, res) => {
     try {
         const id = req.params.id;
-        // Güncelleme işleminde de periyot gelmezse mevcut halini korur
         const guncelUretim = await Uretim.findByIdAndUpdate(id, req.body, { returnDocument: 'after' });
 
         if (!guncelUretim) {
