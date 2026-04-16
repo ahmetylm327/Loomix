@@ -244,12 +244,6 @@ const UretimListesi = () => {
                             </Form.Item>
                         </Col>
                         <Col xs={24} sm={12}>
-                            <Form.Item name="entryType" label="Kayıt Tipi" initialValue="Günlük">
-                                <Select size="large">
-                                    <Option value="Günlük">Günlük</Option>
-                                    <Option value="Haftalık">Haftalık</Option>
-                                </Select>
-                            </Form.Item>
                         </Col>
                     </Row>
 

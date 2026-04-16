@@ -4,7 +4,8 @@ const Urun = mongoose.model('Urun');
 
 const uretimEkle = async (req, res) => {
     try {
-        const { productId, quantity, entryType, productionDate, notes } = req.body;
+        // 1. DEĞİŞİKLİK: periyot değişkenini de karşıla
+        const { productId, quantity, entryType, productionDate, notes, periyot } = req.body;
 
         const urunVarMi = await Urun.findById(productId);
         if (!urunVarMi) {
@@ -16,7 +17,9 @@ const uretimEkle = async (req, res) => {
             quantity,
             entryType,
             productionDate,
-            notes
+            notes,
+            // 2. DEĞİŞİKLİK: Frontend boş gönderse bile otomatik "Günlük" kaydet
+            periyot: periyot || "Günlük"
         });
 
         await yeniUretim.save();
@@ -43,6 +46,7 @@ const uretimListele = async (req, res) => {
 const uretimGuncelle = async (req, res) => {
     try {
         const id = req.params.id;
+        // Güncelleme işleminde de periyot gelmezse mevcut halini korur
         const guncelUretim = await Uretim.findByIdAndUpdate(id, req.body, { returnDocument: 'after' });
 
         if (!guncelUretim) {
@@ -67,7 +71,6 @@ const uretimSil = async (req, res) => {
         res.status(400).json({ mesaj: "Üretim silinemedi", detay: hata.message });
     }
 };
-
 
 module.exports = {
     uretimEkle,

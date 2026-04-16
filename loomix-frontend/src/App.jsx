@@ -39,7 +39,7 @@ const AppContent = () => {
     { key: '/', icon: <DashboardOutlined />, label: <Link to="/">Dashboard</Link> },
     { key: '/personeller', icon: <UserOutlined />, label: <Link to="/personeller">Personel Yönetimi</Link> },
     { key: '/cariler', icon: <TeamOutlined />, label: <Link to="/cariler">Cari (Firma) Listesi</Link> },
-    { key: '/urunler', icon: <AppstoreOutlined />, label: <Link to="/urunler">Ürün Tanımları</Link> },
+    { key: '/urunler', icon: <AppstoreOutlined />, label: <Link to="/urunler">Stok Tanımları</Link> },
     { key: '/puantaj', icon: <FileDoneOutlined />, label: <Link to="/puantaj">Puantaj Yükleme</Link> },
     { key: '/uretim', icon: <CodeSandboxOutlined />, label: <Link to="/uretim">Üretim Girişi</Link> },
     { key: '/kasa', icon: <WalletOutlined />, label: <Link to="/kasa">Kasa Defteri</Link> },
