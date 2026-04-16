@@ -4,7 +4,7 @@ const Urun = mongoose.model('Urun');
 
 const uretimEkle = async (req, res) => {
     try {
-        const { productId, quantity, entryType, productionDate, notes, periyot } = req.body;
+        const { productId, quantity, entryType, productionDate, notes } = req.body;
 
         const urunVarMi = await Urun.findById(productId);
         if (!urunVarMi) {
@@ -15,10 +15,9 @@ const uretimEkle = async (req, res) => {
             productId,
             quantity,
             // 🚀 İŞTE DÜZELTİLEN SATIR: Artık boş gelirse otomatik "Üretim" yazacak
-            entryType: entryType || "Üretim",
+            entryType: entryType || "Günlük",
             productionDate,
-            notes,
-            periyot: periyot || "Günlük"
+            notes
         });
 
         await yeniUretim.save();
