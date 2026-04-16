@@ -215,21 +215,6 @@ const UrunListesi = () => {
 
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
-                            <Form.Item name="kategori" label="Kategori Sınıfı" rules={[{ required: true }]}>
-                                <Select placeholder="Kategori Seçiniz">
-                                    <Option value="Üst Giyim">Üst Giyim</Option>
-                                    <Option value="Alt Giyim">Alt Giyim</Option>
-                                    <Option value="Dış Giyim">Dış Giyim</Option>
-                                    <Option value="Ev Tekstili">Ev Tekstili</Option>
-                                    <Option value="Aksesuar">Aksesuar</Option>
-                                    <Option value="Diğer">Diğer</Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12}>
-                            <Form.Item name="barkod" label="Barkod No (Opsiyonel)">
-                                <Input placeholder="Okutun veya yazın..." prefix={<BarcodeOutlined />} />
-                            </Form.Item>
                         </Col>
                     </Row>
 

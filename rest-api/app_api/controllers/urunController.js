@@ -21,13 +21,15 @@ const urunEkle = async (req, res) => {
 
         const yeniUrunData = {
             stokKodu: req.body.stokKodu,
-            barkod: req.body.barkod || "",
+            // 1. DEĞİŞİKLİK: Barkod gelmezse "Barkodsuz" olarak ata
+            barkod: req.body.barkod || "Barkodsuz",
             urunAdi: req.body.urunAdi,
             birimFiyat: req.body.birimFiyat,
             kdvOrani: req.body.kdvOrani || 10,
             birim: req.body.birim || 'Adet',
             cariId: new mongoose.Types.ObjectId(req.body.cariId),
-            kategori: req.body.kategori,
+            // 2. DEĞİŞİKLİK: Kategori gelmezse "Genel" olarak ata
+            kategori: req.body.kategori || "Genel",
             zorlukDerecesi: req.body.zorlukDerecesi || 1,
             aktifMi: req.body.aktifMi !== undefined ? req.body.aktifMi : true
         };
