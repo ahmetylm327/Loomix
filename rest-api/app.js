@@ -5,8 +5,11 @@ const apiRouter = require('./app_api/routers/index');
 
 const app = express();
 
-// 🛡️ CORS Ayarı (Canlıda sorun çıkmaması için)
-app.use(cors());
+// 🛡️ CORS Ayarı (Sadece Vercel frontend'ine izin verir)
+app.use(cors({
+    origin: 'https://loomix-two.vercel.app/', // ÖRNEK: 'https://loomix-frontend-abc.vercel.app'
+    credentials: true
+}));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
