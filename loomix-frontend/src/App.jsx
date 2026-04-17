@@ -32,7 +32,7 @@ const AppContent = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('loomix_token');
-    window.location.href = '/login';
+    window.location.href = '/#/login';
   };
 
   const menuItems = [
