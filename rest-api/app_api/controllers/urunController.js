@@ -28,8 +28,7 @@ const urunEkle = async (req, res) => {
             kdvOrani: req.body.kdvOrani || 10,
             birim: req.body.birim || 'Adet',
             cariId: new mongoose.Types.ObjectId(req.body.cariId),
-            // 2. DEĞİŞİKLİK: Kategori gelmezse "Genel" olarak ata
-            kategori: req.body.kategori || "Hammadde",
+
             zorlukDerecesi: req.body.zorlukDerecesi || 1,
             aktifMi: req.body.aktifMi !== undefined ? req.body.aktifMi : true
         };
