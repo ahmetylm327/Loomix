@@ -5,9 +5,13 @@ const apiRouter = require('./app_api/routers/index');
 
 const app = express();
 
-// 🛡️ CORS Ayarı (Sadece Vercel frontend'ine izin verir)
+// 🛡️ Gelişmiş CORS Ayarı
 app.use(cors({
-    origin: 'https://loomix-two.vercel.app', // ÖRNEK: 'https://loomix-frontend-abc.vercel.app'
+    origin: function (origin, callback) {
+        // Gelen her isteğe izin ver (Geliştirme aşaması için en rahatı)
+        // İleride sadece belirli linkleri içeren bir dizi/array de koyabilirsin
+        callback(null, true);
+    },
     credentials: true
 }));
 
@@ -17,9 +21,9 @@ app.use(express.urlencoded({ extended: false }));
 // Rotaları Bağla
 app.use('/api', apiRouter);
 
-// 🚀 PORT Ayarı (Canlı sunucu için dinamik, local için 9000)
+// 🚀 Render ve Local için dinamik PORT
 const PORT = process.env.PORT || 9000;
 
 app.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda başarıyla çalışıyor.`);
+    console.log(`LOOMIX Sunucusu ${PORT} portunda başarıyla çalışıyor.`);
 });
