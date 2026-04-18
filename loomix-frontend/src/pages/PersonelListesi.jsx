@@ -5,7 +5,7 @@ import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const { Title, Text } = Typography;
 const { confirm } = Modal;
@@ -229,7 +229,7 @@ const PersonelListesi = () => {
             (item.bakiyeSonrasi || 0).toString()
         ]);
 
-        doc.autoTable({
+        autoTable(doc, {
             head: [tableColumn],
             body: tableRows,
             startY: 50,
