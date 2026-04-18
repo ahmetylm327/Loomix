@@ -1,174 +1,197 @@
 const mongoose = require('mongoose');
 const Personel = mongoose.model('Personel');
-const Cari = mongoose.model('Cari');
-const Urun = mongoose.model('Urun');
+const Odeme = mongoose.model('Odeme');
 
+// Eğer PersonelHareket modeli henüz tanımlanmadıysa sistemi çökertmemek için güvenli çağırım
+let PersonelHareket;
+try {
+    PersonelHareket = mongoose.model('PersonelHareket');
+} catch (error) {
+    console.warn("Uyarı: PersonelHareket modeli henüz oluşturulmamış. Finansal işlemler eksik çalışabilir.");
+}
+
+// -------------------------------------------------------------------
+// 1. STANDART CRUD İŞLEMLERİ (Ekle, Listele, Güncelle, Sil)
+// -------------------------------------------------------------------
 
 const personelEkle = async (req, res) => {
     try {
-        // --- MONGODB HAYALET İNDEKS TEMİZLEYİCİ ---
-        try {
-            await Personel.collection.dropIndexes();
-            console.log("Personel indeksleri temizlendi.");
-        } catch (indexError) {
-            console.log("Personel indeksi temizlenemedi veya yok.");
-        }
-        // ------------------------------------------
+        // Frontend'den gelen İngilizce/Farklı anahtarları veritabanı şemasına uygun hale getiriyoruz
+        const dbData = {
+            adSoyad: req.body.fullname || req.body.adSoyad,
+            ucretTipi: req.body.wage_type === 'Daily' ? 'Günlük' : (req.body.wage_type === 'Hourly' ? 'Saatlik' : (req.body.wage_type || 'Günlük')),
+            ucretMiktari: Number(req.body.daily_wage || req.body.ucretMiktari || 0),
+            pozisyon: req.body.position || req.body.pozisyon,
+            telefon: req.body.phoneNumber || req.body.telefon,
+            mikroId: req.body.mikro_id || req.body.mikroId || null,
+            bakiye: 0
+        };
 
-        // GELEN BÜTÜN VERİLERİ YAKALA (Hem İngilizce hem Türkçe ihtimalleri)
-        const gelenAdSoyad = req.body.fullname || req.body.adSoyad;
-        const gelenUcret = req.body.ucretMiktari || req.body.daily_wage || req.body.birimUcret;
-        const gelenPozisyon = req.body.position || req.body.pozisyon;
-        const gelenTelefon = req.body.phoneNumber || req.body.telefon;
-        const gelenWageType = req.body.wage_type || req.body.ucretTipi;
-
-        // Frontend'den gelen wage_type'ı kontrol et
-        let ucretTipi = "Günlük";
-        if (gelenWageType === "Hourly" || gelenWageType === "Saatlik") {
-            ucretTipi = "Saatlik";
-        }
-
-        const yeniPersonel = await Personel.create({
-            mikroId: req.body.mikro_id || null,
-            adSoyad: gelenAdSoyad,
-            ucretTipi: ucretTipi,
-            ucretMiktari: gelenUcret, // Artık ne isimle gelirse gelsin yakalayacak!
-            pozisyon: gelenPozisyon,
-            telefon: gelenTelefon
-        });
-
-        res.status(201).json({
-            empoyeeId: yeniPersonel._id,
-            status: "Başarılı"
-        });
-    } catch (hata) {
-        console.error("Personel Ekleme Hatası:", hata);
-        res.status(400).json({
-            mesaj: "Geçersiz Veri Girişi",
-            detay: hata.message
-        });
+        const yeniPersonel = new Personel(dbData);
+        await yeniPersonel.save();
+        res.status(201).json(yeniPersonel);
+    } catch (error) {
+        res.status(400).json({ mesaj: "Personel eklenemedi", detay: error.message });
     }
 };
 
 const personelListele = async (req, res) => {
     try {
-        let filtre = { aktifMi: true };
-
-        if (req.query.position) {
-            filtre.pozisyon = req.query.position;
-        }
-        const personeller = await Personel.find(filtre);
-        const tasarımaUygunListe = personeller.map((personel) => {
-            return {
-                employeeId: personel._id,
-                fullname: personel.adSoyad,
-                position: personel.pozisyon,
-                daily_wage: personel.ucretMiktari,
-                balance: personel.bakiye
-            };
-        });
-        res.status(200).json(tasarımaUygunListe);
-    } catch (hata) {
-        res.status(500).json({ "mesaj": "Personeller getirilemedi: " + hata.name + ": " + hata.message });
+        const personeller = await Personel.find().sort({ kayitTarihi: -1 });
+        res.status(200).json(personeller);
+    } catch (error) {
+        res.status(500).json({ mesaj: "Personel listesi alınamadı", detay: error.message });
     }
 };
 
 const personelGuncelle = async (req, res) => {
     try {
         const id = req.params.employeeId;
-        const personel = await Personel.findById(id);
-        if (!personel) {
-            return res.status(404).json({
-                error: "Girdiğiniz ID numarasına ait bir çalışan kaydı mevcut değil."
-            });
-        }
-        const { fullname, daily_wage, position, phoneNumber } = req.body;
-        if (fullname) personel.adSoyad = fullname;
-        if (daily_wage) personel.ucretMiktari = daily_wage;
-        if (position) personel.pozisyon = position;
-        if (phoneNumber) personel.telefon = phoneNumber;
+        const dbData = {
+            adSoyad: req.body.fullname || req.body.adSoyad,
+            ucretTipi: req.body.wage_type === 'Daily' ? 'Günlük' : (req.body.wage_type === 'Hourly' ? 'Saatlik' : (req.body.wage_type || 'Günlük')),
+            ucretMiktari: Number(req.body.daily_wage || req.body.ucretMiktari || 0),
+            pozisyon: req.body.position || req.body.pozisyon,
+            telefon: req.body.phoneNumber || req.body.telefon,
+            mikroId: req.body.mikro_id || req.body.mikroId
+        };
 
-        const guncellenenPersonel = await personel.save();
-        res.status(200).json({
-            status: "Personel bilgileri ve iletişim numarası güncellendi.",
-            updatedEmployee: {
-                employeeId: guncellenenPersonel._id,
-                fullname: guncellenenPersonel.adSoyad,
-                phoneNumber: guncellenenPersonel.telefon,
-                position: guncellenenPersonel.pozisyon,
-                daily_wage: guncellenenPersonel.ucretMiktari
-            }
-        });
-    } catch (hata) {
-        res.status(400).json({
-            description: "Geçersiz Veri Formatı",
-            detay: hata.message
-        });
+        const guncel = await Personel.findByIdAndUpdate(id, dbData, { new: true });
+        if (!guncel) return res.status(404).json({ mesaj: "Personel bulunamadı" });
+
+        res.status(200).json(guncel);
+    } catch (error) {
+        res.status(400).json({ mesaj: "Personel güncellenemedi", detay: error.message });
     }
 };
 
 const personelSil = async (req, res) => {
     try {
         const id = req.params.employeeId;
+        const silinen = await Personel.findByIdAndDelete(id);
 
-        const personel = await Personel.findById(id);
-        if (!personel) {
-            return res.status(404).json({
-                mesaj: "Personel Bulunamadı"
-            });
-        }
-        personel.aktifMi = false;
-        await personel.save();
-        res.status(204).send();
-    } catch (hata) {
-        res.status(400).json({ mesaj: "Geçersiz ID Formatı" });
+        if (!silinen) return res.status(404).json({ mesaj: "Personel bulunamadı" });
+
+        // Opsiyonel: Personel silinince hareketlerini de silebilirsin ancak finansal geçmiş 
+        // tutarlılığı için hareketlerin kalması genelde daha iyidir.
+        res.status(200).json({ mesaj: "Personel başarıyla silindi." });
+    } catch (error) {
+        res.status(400).json({ mesaj: "Personel silinemedi", detay: error.message });
     }
 };
+
+// -------------------------------------------------------------------
+// 2. FİNANSAL İŞLEMLER (Bireysel Ödeme, Toplu Ödeme, Ekstre)
+// -------------------------------------------------------------------
 
 const personelOdemeYap = async (req, res) => {
+    const { employeeId } = req.params;
+    const tutar = Number(req.body.miktar || req.body.tutar);
+
     try {
-        const id = req.params.employeeId;
-        const { miktar } = req.body;
+        const personel = await Personel.findById(employeeId);
+        if (!personel) return res.status(404).json({ mesaj: "Personel bulunamadı" });
+        if (tutar <= 0) return res.status(400).json({ mesaj: "Geçerli bir tutar girin." });
 
-        if (!miktar || isNaN(miktar) || miktar <= 0) {
-            return res.status(400).json({ mesaj: "Lütfen geçerli bir ödeme tutarı giriniz." });
-        }
-
-        const personel = await Personel.findById(id);
-        if (!personel) {
-            return res.status(404).json({ mesaj: "Personel bulunamadı." });
-        }
-
-        personel.bakiye = (personel.bakiye || 0) - Number(miktar);
+        // 1. Personel bakiyesinden düş
+        personel.bakiye = (personel.bakiye || 0) - tutar;
         await personel.save();
 
-        res.status(200).json({
-            mesaj: `${personel.adSoyad} adlı personele ${miktar} ₺ ödeme yapıldı.`,
-            kalanBakiye: personel.bakiye
+        // 2. Hareket tablosuna yaz (Eğer model tanımlıysa)
+        if (PersonelHareket) {
+            await PersonelHareket.create({
+                personelId: employeeId,
+                islemTipi: 'Ödeme',
+                tutar: -tutar,
+                bakiyeSonrasi: personel.bakiye,
+                aciklama: req.body.notlar || 'Manuel Avans/Maaş Ödemesi'
+            });
+        }
+
+        // 3. Kasadan Gider olarak düş
+        await Odeme.create({
+            islemYonu: 'Gider',
+            odemeTipi: 'Nakit/Banka',
+            tutar: tutar,
+            kategori: 'Personel Ödemesi',
+            ilgiliId: employeeId,
+            odemeTarihi: new Date(),
+            notlar: `${personel.adSoyad} adlı personele avans/maaş ödemesi.`
         });
-    } catch (hata) {
-        res.status(500).json({ mesaj: "Ödeme sırasında hata oluştu", detay: hata.message });
+
+        res.status(200).json({ mesaj: "Ödeme başarıyla kaydedildi.", bakiye: personel.bakiye });
+    } catch (error) {
+        res.status(500).json({ mesaj: "Ödeme işlemi sırasında hata oluştu", detay: error.message });
     }
 };
 
-const getDashboardStats = async (req, res) => {
+const topluMaasOde = async (req, res) => {
+    const { personelIds, odemeTarihi, notlar } = req.body;
+
+    if (!personelIds || !Array.isArray(personelIds) || personelIds.length === 0) {
+        return res.status(400).json({ mesaj: "Ödeme yapılacak personeller seçilmedi." });
+    }
+
     try {
-        const personelSayisi = await Personel.countDocuments({ aktifMi: true });
-        const cariSayisi = await Cari.countDocuments();
-        const urunSayisi = await Urun.countDocuments();
+        let toplamOdenen = 0;
 
-        //Toplam Borç Hesabı: Tüm personellerin bakiyeleri toplamı
-        const personeller = await Personel.find({ aktifMi: true });
-        const toplamBorc = personeller.reduce((toplam, p) => toplam + (p.bakiye || 0), 0);
+        for (let id of personelIds) {
+            const personel = await Personel.findById(id);
 
-        res.status(200).json({
-            personelSayisi,
-            cariSayisi,
-            urunSayisi,
-            toplamBorc
-        });
-    } catch (hata) {
-        res.status(500).json({ mesaj: "İstatistikler alınamadı", hata: hata.message });
+            // Sadece içeride alacağı (bakiyesi) olanlara ödeme yap
+            if (personel && personel.bakiye > 0) {
+                const odenenTutar = personel.bakiye;
+                toplamOdenen += odenenTutar;
+
+                // Bakiyeyi sıfırla
+                personel.bakiye = 0;
+                await personel.save();
+
+                // Hareket kaydı at (-)
+                if (PersonelHareket) {
+                    await PersonelHareket.create({
+                        personelId: id,
+                        islemTipi: 'Ödeme',
+                        tutar: -odenenTutar,
+                        bakiyeSonrasi: 0,
+                        aciklama: notlar || 'Toplu Maaş Kapatması'
+                    });
+                }
+            }
+        }
+
+        if (toplamOdenen > 0) {
+            // Toplam tutarı Kasa'ya tek kalem gider olarak yaz
+            await Odeme.create({
+                islemYonu: 'Gider',
+                odemeTipi: 'Banka/Nakit',
+                tutar: toplamOdenen,
+                kategori: 'Personel Maaşları',
+                odemeTarihi: odemeTarihi || new Date(),
+                notlar: notlar || `${personelIds.length} personelin toplam maaş ödemesi.`
+            });
+            res.status(200).json({ mesaj: "Toplu ödeme başarıyla gerçekleşti!", odenen: toplamOdenen });
+        } else {
+            res.status(400).json({ mesaj: "Seçilen personellerin ödenecek bakiyesi bulunmuyor." });
+        }
+
+    } catch (error) {
+        res.status(500).json({ mesaj: "Toplu ödeme sırasında hata oluştu", detay: error.message });
+    }
+};
+
+const getPersonelEkstre = async (req, res) => {
+    const { employeeId } = req.params;
+    try {
+        if (!PersonelHareket) {
+            return res.status(500).json({ mesaj: "Personel Hareket modeli sistemde bulunamadı." });
+        }
+
+        const hareketler = await PersonelHareket.find({ personelId: employeeId })
+            .sort({ islemTarihi: -1 }); // En yeniler en üstte
+        res.status(200).json(hareketler);
+    } catch (error) {
+        res.status(500).json({ mesaj: "Ekstre çekilemedi", detay: error.message });
     }
 };
 
@@ -178,5 +201,6 @@ module.exports = {
     personelGuncelle,
     personelSil,
     personelOdemeYap,
-    getDashboardStats
+    topluMaasOde,
+    getPersonelEkstre
 };

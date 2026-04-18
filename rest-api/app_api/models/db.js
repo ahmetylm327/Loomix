@@ -24,3 +24,4 @@ require('./cari');
 require('./urun');
 require('./uretim');
 require('./kullanici');
+require('./personelHareket');
