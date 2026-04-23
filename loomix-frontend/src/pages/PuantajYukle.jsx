@@ -94,7 +94,7 @@ const PuantajYukle = () => {
         { title: 'Yeni Bakiye', dataIndex: 'yeniBakiye', align: 'right', render: b => <b>{b} ₺</b> },
     ];
 
-    // 🚀 YENİ: Sayılı Kayıtsız Personel Sütunları
+    // 🚀 GÜNCEL: Sayılı Kayıtsız Personel Sütunları
     const bulunamayanSutunlar = [
         {
             title: 'Cihazdaki İsim & Kayıt Bilgisi',
@@ -102,14 +102,16 @@ const PuantajYukle = () => {
             render: (_, record) => (
                 <div>
                     <Text type="danger"><b>{record.isim}</b></Text><br />
-                    <span style={{ fontSize: '11px', color: '#8c8c8c' }}>Cihazda <b style={{ color: '#000' }}>{record.basimSayisi} günlük</b> kaydı tespit edildi</span>
+                    <span style={{ fontSize: '11px', color: '#8c8c8c' }}>
+                        Cihazda <b style={{ color: '#000' }}>{record.basimSayisi}</b> kez basım kaydı tespit edildi.
+                    </span>
                 </div>
             )
         },
         { title: 'Aksiyon', align: 'right', render: () => <Tag color="warning">Sisteme Ekleyin</Tag> }
     ];
 
-    // 🚀 YENİ: Detaylı Hata Gösterimli Eksik Basım Sütunları
+    // 🚀 Detaylı Hata Gösterimli Eksik Basım Sütunları
     const eksikBasimSutunlar = [
         { title: 'Personel', dataIndex: 'isim', render: val => <b>{val}</b> },
         {
@@ -180,7 +182,7 @@ const PuantajYukle = () => {
                         </Col>
                     </Row>
 
-                    {/* 🚀 SAYFALAMA GERİ GELDİ (pagination={{ pageSize: 5 }}) */}
+                    {/* 🚀 SAYFALAMA AKTİF */}
                     {(rapor.eksikBasimlar?.length || 0) > 0 && (
                         <Card title={<><QuestionCircleOutlined style={{ color: '#cf1322' }} /> Eksik Kart Basanlar</>} style={{ marginBottom: 20, border: '1px solid #ffa39e' }} styles={{ body: { padding: 0 } }}>
                             <Alert message="Bu personeller giriş veya çıkışta kart basmayı unuttuğu için bugünkü maaşları YATIRILMADI. Personel listesinden manuel düzeltme yapınız." type="error" banner />
