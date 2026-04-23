@@ -21,7 +21,6 @@ const puantajYukle = (req, res) => {
         if (!req.file) return res.status(400).json({ mesaj: "Excel dosyası bulunamadı." });
 
         try {
-            // ⚙️ 1. Ayarları Çek (Tolerans Eklendi)
             let settings = await Setting.findOne({ key: 'mesai_ayarlari' });
             if (!settings) {
                 settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 } };
@@ -36,32 +35,38 @@ const puantajYukle = (req, res) => {
             const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
             const excelVerisi = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
 
-            // 🚀 YENİ: eksikBasimlar dizisi eklendi
-            let ozet = { basariliTahakkuklar: [], sistemdeBulunamayanlar: [], eksikBasimlar: [] };
+            let basariliTahakkuklar = [];
+            let eksikBasimlar = [];
+            let bulunamayanlarMap = {}; // Kayıtsızları gruplamak için
 
             for (let satir of excelVerisi) {
                 const personel = await Personel.findOne({ adSoyad: satir.AdSoyad, aktifMi: true });
 
                 if (personel) {
-                    // ⚠️ YENİ: Eksik Basım Kontrolü (Giriş veya Çıkış boşsa)
+                    // ⚠️ YENİ: Hatanın tam yerini tespit et (Giriş mi Çıkış mı?)
                     if (!satir.GirisSaati || !satir.CikisSaati) {
-                        ozet.eksikBasimlar.push({
+                        let hataNedeni = "";
+                        if (!satir.GirisSaati && !satir.CikisSaati) hataNedeni = "Hiç basmamış (Giriş/Çıkış Yok)";
+                        else if (!satir.GirisSaati) hataNedeni = "Girişte basmayı unutmuş";
+                        else if (!satir.CikisSaati) hataNedeni = "Çıkışta basmayı unutmuş";
+
+                        eksikBasimlar.push({
                             isim: satir.AdSoyad,
                             giris: satir.GirisSaati || '-',
-                            cikis: satir.CikisSaati || '-'
+                            cikis: satir.CikisSaati || '-',
+                            mesaj: hataNedeni
                         });
-                        continue; // Bu kişiyi hesaplamadan atla, diğerlerine geç
+                        continue;
                     }
 
                     const gercekGiris = timeToMinutes(satir.GirisSaati);
                     const cikis = timeToMinutes(satir.CikisSaati);
 
-                    // 🧮 YENİ: Tolerans Hesabı (Sadece geç kalanlar için)
                     let islemGorecekGiris = gercekGiris;
                     const gecikmeSuresi = gercekGiris - mesaiBaslangicDakika;
 
                     if (gecikmeSuresi > 0 && gecikmeSuresi <= (tolerans || 0)) {
-                        islemGorecekGiris = mesaiBaslangicDakika; // Tolerans içindeyse saati 08:00'a çek
+                        islemGorecekGiris = mesaiBaslangicDakika;
                     }
 
                     if (islemGorecekGiris > 0 && cikis > islemGorecekGiris) {
@@ -84,7 +89,7 @@ const puantajYukle = (req, res) => {
                         personel.bakiye = (personel.bakiye || 0) + gunlukHakedis;
                         await personel.save();
 
-                        ozet.basariliTahakkuklar.push({
+                        basariliTahakkuklar.push({
                             isim: personel.adSoyad,
                             tahakkukTutar: Math.round(gunlukHakedis),
                             gun: (calismaSaati / 10).toFixed(1),
@@ -93,9 +98,19 @@ const puantajYukle = (req, res) => {
                         });
                     }
                 } else {
-                    ozet.sistemdeBulunamayanlar.push({ isim: satir.AdSoyad, gun: "?" });
+                    // 🧮 YENİ: Sistemde olmayan kişilerin kaç kez basım yaptığını say
+                    if (!bulunamayanlarMap[satir.AdSoyad]) {
+                        bulunamayanlarMap[satir.AdSoyad] = { isim: satir.AdSoyad, basimSayisi: 0 };
+                    }
+                    bulunamayanlarMap[satir.AdSoyad].basimSayisi += 1;
                 }
             }
+
+            let ozet = {
+                basariliTahakkuklar,
+                sistemdeBulunamayanlar: Object.values(bulunamayanlarMap), // Haritayı Diziye Çevir
+                eksikBasimlar
+            };
 
             res.status(200).json({ mesaj: "Puantaj başarıyla işlendi!", ozet });
 

@@ -94,15 +94,33 @@ const PuantajYukle = () => {
         { title: 'Yeni Bakiye', dataIndex: 'yeniBakiye', align: 'right', render: b => <b>{b} ₺</b> },
     ];
 
+    // 🚀 YENİ: Sayılı Kayıtsız Personel Sütunları
     const bulunamayanSutunlar = [
-        { title: 'Cihazdaki İsim', dataIndex: 'isim', render: val => <Text type="danger"><b>{val}</b></Text> },
+        {
+            title: 'Cihazdaki İsim & Kayıt Bilgisi',
+            key: 'bilgi',
+            render: (_, record) => (
+                <div>
+                    <Text type="danger"><b>{record.isim}</b></Text><br />
+                    <span style={{ fontSize: '11px', color: '#8c8c8c' }}>Cihazda <b style={{ color: '#000' }}>{record.basimSayisi} günlük</b> kaydı tespit edildi</span>
+                </div>
+            )
+        },
         { title: 'Aksiyon', align: 'right', render: () => <Tag color="warning">Sisteme Ekleyin</Tag> }
     ];
 
+    // 🚀 YENİ: Detaylı Hata Gösterimli Eksik Basım Sütunları
     const eksikBasimSutunlar = [
         { title: 'Personel', dataIndex: 'isim', render: val => <b>{val}</b> },
-        { title: 'Giriş', dataIndex: 'giris', render: val => <Tag color={val === '-' ? 'error' : 'default'}>{val}</Tag> },
-        { title: 'Çıkış', dataIndex: 'cikis', render: val => <Tag color={val === '-' ? 'error' : 'default'}>{val}</Tag> },
+        {
+            title: 'Giriş / Çıkış', key: 'saatler', render: (_, r) => (
+                <div>
+                    G: <Tag color={r.giris === '-' ? 'error' : 'default'}>{r.giris}</Tag>
+                    Ç: <Tag color={r.cikis === '-' ? 'error' : 'default'}>{r.cikis}</Tag>
+                </div>
+            )
+        },
+        { title: 'Hata Nedeni', dataIndex: 'mesaj', render: val => <Text type="danger">{val}</Text> },
         { title: 'Durum', align: 'right', render: () => <Tag color="red">Maaş İşlenmedi</Tag> }
     ];
 
@@ -162,22 +180,22 @@ const PuantajYukle = () => {
                         </Col>
                     </Row>
 
-                    {/* 🚀 YENİ ZIRHLI: Eksik Basanlar Tablosu */}
+                    {/* 🚀 SAYFALAMA GERİ GELDİ (pagination={{ pageSize: 5 }}) */}
                     {(rapor.eksikBasimlar?.length || 0) > 0 && (
                         <Card title={<><QuestionCircleOutlined style={{ color: '#cf1322' }} /> Eksik Kart Basanlar</>} style={{ marginBottom: 20, border: '1px solid #ffa39e' }} styles={{ body: { padding: 0 } }}>
                             <Alert message="Bu personeller giriş veya çıkışta kart basmayı unuttuğu için bugünkü maaşları YATIRILMADI. Personel listesinden manuel düzeltme yapınız." type="error" banner />
-                            <Table dataSource={rapor.eksikBasimlar || []} columns={eksikBasimSutunlar} rowKey="isim" pagination={false} size="small" />
+                            <Table dataSource={rapor.eksikBasimlar || []} columns={eksikBasimSutunlar} rowKey={(r, i) => r.isim + i} pagination={{ pageSize: 5 }} size="small" />
                         </Card>
                     )}
 
                     {(rapor.sistemdeBulunamayanlar?.length || 0) > 0 && (
                         <Card title={<><WarningOutlined style={{ color: '#faad14' }} /> Kaydı Bulunamayanlar</>} style={{ marginBottom: 20 }} styles={{ body: { padding: 0 } }}>
-                            <Table dataSource={rapor.sistemdeBulunamayanlar || []} columns={bulunamayanSutunlar} rowKey="isim" pagination={false} size="small" />
+                            <Table dataSource={rapor.sistemdeBulunamayanlar || []} columns={bulunamayanSutunlar} rowKey="isim" pagination={{ pageSize: 5 }} size="small" />
                         </Card>
                     )}
 
                     <Card title={<><CheckCircleOutlined style={{ color: '#52c41a' }} /> Başarılı İşlemler</>} styles={{ body: { padding: 0 } }}>
-                        <Table dataSource={rapor.basariliTahakkuklar || []} columns={basariliSutunlar} rowKey="isim" pagination={{ pageSize: 5 }} size="small" />
+                        <Table dataSource={rapor.basariliTahakkuklar || []} columns={basariliSutunlar} rowKey={(r, i) => r.isim + i} pagination={{ pageSize: 5 }} size="small" />
                     </Card>
                 </div>
             )}
