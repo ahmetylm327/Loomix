@@ -9,7 +9,6 @@ const Setting = mongoose.models.Setting || mongoose.model('Setting', new mongoos
 
 const upload = multer({ storage: multer.memoryStorage() }).single('file');
 
-// Yardımcı Fonksiyon: "08:30" formatını dakikaya çevirir
 const timeToMinutes = (timeStr) => {
     if (!timeStr || typeof timeStr !== 'string') return 0;
     const [hours, minutes] = timeStr.split(':').map(Number);
@@ -22,13 +21,14 @@ const puantajYukle = (req, res) => {
         if (!req.file) return res.status(400).json({ mesaj: "Excel dosyası bulunamadı." });
 
         try {
-            // ⚙️ 1. Güncel Mesai Ayarlarını Veritabanından Al (Yoksa Varsayılanı Kullan)
+            // ⚙️ 1. Ayarları Çek (Tolerans Eklendi)
             let settings = await Setting.findOne({ key: 'mesai_ayarlari' });
             if (!settings) {
-                settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30" } };
+                settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 } };
             }
-            const { baslangic, bitis, molaBas, molaBit } = settings.value;
+            const { baslangic, bitis, molaBas, molaBit, tolerans } = settings.value;
 
+            const mesaiBaslangicDakika = timeToMinutes(baslangic);
             const molaBasDakika = timeToMinutes(molaBas);
             const molaBitDakika = timeToMinutes(molaBit);
             const molaSure = molaBitDakika - molaBasDakika;
@@ -36,30 +36,45 @@ const puantajYukle = (req, res) => {
             const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
             const excelVerisi = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
 
-            let ozet = { basariliTahakkuklar: [], sistemdeBulunamayanlar: [] };
+            // 🚀 YENİ: eksikBasimlar dizisi eklendi
+            let ozet = { basariliTahakkuklar: [], sistemdeBulunamayanlar: [], eksikBasimlar: [] };
 
             for (let satir of excelVerisi) {
                 const personel = await Personel.findOne({ adSoyad: satir.AdSoyad, aktifMi: true });
 
                 if (personel) {
-                    const giris = timeToMinutes(satir.GirisSaati);
+                    // ⚠️ YENİ: Eksik Basım Kontrolü (Giriş veya Çıkış boşsa)
+                    if (!satir.GirisSaati || !satir.CikisSaati) {
+                        ozet.eksikBasimlar.push({
+                            isim: satir.AdSoyad,
+                            giris: satir.GirisSaati || '-',
+                            cikis: satir.CikisSaati || '-'
+                        });
+                        continue; // Bu kişiyi hesaplamadan atla, diğerlerine geç
+                    }
+
+                    const gercekGiris = timeToMinutes(satir.GirisSaati);
                     const cikis = timeToMinutes(satir.CikisSaati);
 
-                    if (giris > 0 && cikis > giris) {
-                        // 🧮 2. Toplam Süreyi Hesapla (Dakika)
-                        let toplamDakika = cikis - giris;
+                    // 🧮 YENİ: Tolerans Hesabı (Sadece geç kalanlar için)
+                    let islemGorecekGiris = gercekGiris;
+                    const gecikmeSuresi = gercekGiris - mesaiBaslangicDakika;
 
-                        // 🥪 3. Mola Kontrolü: Eğer personel mola saatlerini kapsıyorsa molayı düş
-                        if (giris <= molaBasDakika && cikis >= molaBitDakika) {
+                    if (gecikmeSuresi > 0 && gecikmeSuresi <= (tolerans || 0)) {
+                        islemGorecekGiris = mesaiBaslangicDakika; // Tolerans içindeyse saati 08:00'a çek
+                    }
+
+                    if (islemGorecekGiris > 0 && cikis > islemGorecekGiris) {
+                        let toplamDakika = cikis - islemGorecekGiris;
+
+                        if (islemGorecekGiris <= molaBasDakika && cikis >= molaBitDakika) {
                             toplamDakika -= molaSure;
                         }
 
                         const calismaSaati = toplamDakika / 60;
                         let gunlukHakedis = 0;
 
-                        // 💰 4. Ücret Tipine Göre Hesaplama
                         if (personel.ucretTipi === 'Günlük') {
-                            // Günlük ücreti 10 saatlik (08-19 arası mola hariç) standart mesaiye bölüyoruz
                             const saatlikUcret = personel.ucretMiktari / 10;
                             gunlukHakedis = calismaSaati * saatlikUcret;
                         } else {
@@ -73,7 +88,8 @@ const puantajYukle = (req, res) => {
                             isim: personel.adSoyad,
                             tahakkukTutar: Math.round(gunlukHakedis),
                             gun: (calismaSaati / 10).toFixed(1),
-                            yeniBakiye: Math.round(personel.bakiye)
+                            yeniBakiye: Math.round(personel.bakiye),
+                            toleransUygulandiMi: gecikmeSuresi > 0 && gecikmeSuresi <= tolerans
                         });
                     }
                 } else {
@@ -89,7 +105,6 @@ const puantajYukle = (req, res) => {
     });
 };
 
-// Ayarları Güncelleme Fonksiyonu
 const ayarlarıGuncelle = async (req, res) => {
     try {
         await Setting.findOneAndUpdate(
@@ -107,8 +122,7 @@ const ayarlarıGetir = async (req, res) => {
         if (settings) {
             res.status(200).json(settings.value);
         } else {
-            // Veritabanında yoksa varsayılanları gönder
-            res.status(200).json({ baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30" });
+            res.status(200).json({ baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 });
         }
     } catch (e) {
         res.status(500).json({ mesaj: "Ayarlar çekilemedi" });
