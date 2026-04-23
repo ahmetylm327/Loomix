@@ -37,13 +37,12 @@ const puantajYukle = (req, res) => {
 
             let basariliTahakkuklar = [];
             let eksikBasimlar = [];
-            let bulunamayanlarMap = {}; // Kayıtsızları gruplamak için
+            let bulunamayanlarMap = {}; // 🚀 İŞTE EKSİK OLAN SAYMA MOTORU BURASI
 
             for (let satir of excelVerisi) {
                 const personel = await Personel.findOne({ adSoyad: satir.AdSoyad, aktifMi: true });
 
                 if (personel) {
-                    // ⚠️ YENİ: Hatanın tam yerini tespit et (Giriş mi Çıkış mı?)
                     if (!satir.GirisSaati || !satir.CikisSaati) {
                         let hataNedeni = "";
                         if (!satir.GirisSaati && !satir.CikisSaati) hataNedeni = "Hiç basmamış (Giriş/Çıkış Yok)";
@@ -98,7 +97,7 @@ const puantajYukle = (req, res) => {
                         });
                     }
                 } else {
-                    // 🧮 YENİ: Sistemde olmayan kişilerin kaç kez basım yaptığını say
+                    // 🧮 YENİ: Sistemde olmayan kişilerin kaç kez basım yaptığını sayan blok
                     if (!bulunamayanlarMap[satir.AdSoyad]) {
                         bulunamayanlarMap[satir.AdSoyad] = { isim: satir.AdSoyad, basimSayisi: 0 };
                     }
@@ -108,7 +107,7 @@ const puantajYukle = (req, res) => {
 
             let ozet = {
                 basariliTahakkuklar,
-                sistemdeBulunamayanlar: Object.values(bulunamayanlarMap), // Haritayı Diziye Çevir
+                sistemdeBulunamayanlar: Object.values(bulunamayanlarMap), // Haritayı Diziye Çevirip Yolluyoruz
                 eksikBasimlar
             };
 
