@@ -103,7 +103,8 @@ const PuantajYukle = () => {
                 <div>
                     <Text type="danger"><b>{record.isim}</b></Text><br />
                     <span style={{ fontSize: '11px', color: '#8c8c8c' }}>
-                        Cihazda <b style={{ color: '#000' }}>{record.basimSayisi}</b> kez basım kaydı tespit edildi.
+                        {/* İŞTE SİHİRLİ DOKUNUŞ: basimSayisi yoksa gun'ü al */}
+                        Cihazda <b style={{ color: '#000' }}>{record.basimSayisi || record.gun}</b> kez basım kaydı tespit edildi.
                     </span>
                 </div>
             )
