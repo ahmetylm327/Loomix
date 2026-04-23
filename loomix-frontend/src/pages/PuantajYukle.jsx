@@ -99,7 +99,6 @@ const PuantajYukle = () => {
         { title: 'Aksiyon', align: 'right', render: () => <Tag color="warning">Sisteme Ekleyin</Tag> }
     ];
 
-    // 🚀 YENİ: Eksik Basım Sütunları
     const eksikBasimSutunlar = [
         { title: 'Personel', dataIndex: 'isim', render: val => <b>{val}</b> },
         { title: 'Giriş', dataIndex: 'giris', render: val => <Tag color={val === '-' ? 'error' : 'default'}>{val}</Tag> },
@@ -153,32 +152,32 @@ const PuantajYukle = () => {
                 <div>
                     <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
                         <Col xs={24} sm={8}>
-                            <Card><Statistic title="İşlenen Personel" value={rapor.basariliTahakkuklar.length} prefix={<CheckCircleOutlined style={{ color: '#1890ff' }} />} /></Card>
+                            <Card><Statistic title="İşlenen Personel" value={rapor.basariliTahakkuklar?.length || 0} prefix={<CheckCircleOutlined style={{ color: '#1890ff' }} />} /></Card>
                         </Col>
                         <Col xs={24} sm={8}>
-                            <Card><Statistic title="Dağıtılan Toplam" value={rapor.basariliTahakkuklar.reduce((acc, curr) => acc + curr.tahakkukTutar, 0)} prefix={<DollarOutlined />} suffix="₺" styles={{ content: { color: '#3f8600' } }} /></Card>
+                            <Card><Statistic title="Dağıtılan Toplam" value={(rapor.basariliTahakkuklar || []).reduce((acc, curr) => acc + curr.tahakkukTutar, 0)} prefix={<DollarOutlined />} suffix="₺" styles={{ content: { color: '#3f8600' } }} /></Card>
                         </Col>
                         <Col xs={24} sm={8}>
-                            <Card><Statistic title="Eksik Basım (Hatalı)" value={rapor.eksikBasimlar.length} prefix={<QuestionCircleOutlined />} styles={{ content: { color: rapor.eksikBasimlar.length > 0 ? '#cf1322' : '#8c8c8c' } }} /></Card>
+                            <Card><Statistic title="Eksik Basım (Hatalı)" value={rapor.eksikBasimlar?.length || 0} prefix={<QuestionCircleOutlined />} styles={{ content: { color: (rapor.eksikBasimlar?.length || 0) > 0 ? '#cf1322' : '#8c8c8c' } }} /></Card>
                         </Col>
                     </Row>
 
-                    {/* 🚀 YENİ: Eksik Basanlar Tablosu */}
-                    {rapor.eksikBasimlar.length > 0 && (
+                    {/* 🚀 YENİ ZIRHLI: Eksik Basanlar Tablosu */}
+                    {(rapor.eksikBasimlar?.length || 0) > 0 && (
                         <Card title={<><QuestionCircleOutlined style={{ color: '#cf1322' }} /> Eksik Kart Basanlar</>} style={{ marginBottom: 20, border: '1px solid #ffa39e' }} styles={{ body: { padding: 0 } }}>
                             <Alert message="Bu personeller giriş veya çıkışta kart basmayı unuttuğu için bugünkü maaşları YATIRILMADI. Personel listesinden manuel düzeltme yapınız." type="error" banner />
-                            <Table dataSource={rapor.eksikBasimlar} columns={eksikBasimSutunlar} rowKey="isim" pagination={false} size="small" />
+                            <Table dataSource={rapor.eksikBasimlar || []} columns={eksikBasimSutunlar} rowKey="isim" pagination={false} size="small" />
                         </Card>
                     )}
 
-                    {rapor.sistemdeBulunamayanlar.length > 0 && (
+                    {(rapor.sistemdeBulunamayanlar?.length || 0) > 0 && (
                         <Card title={<><WarningOutlined style={{ color: '#faad14' }} /> Kaydı Bulunamayanlar</>} style={{ marginBottom: 20 }} styles={{ body: { padding: 0 } }}>
-                            <Table dataSource={rapor.sistemdeBulunamayanlar} columns={bulunamayanSutunlar} rowKey="isim" pagination={false} size="small" />
+                            <Table dataSource={rapor.sistemdeBulunamayanlar || []} columns={bulunamayanSutunlar} rowKey="isim" pagination={false} size="small" />
                         </Card>
                     )}
 
                     <Card title={<><CheckCircleOutlined style={{ color: '#52c41a' }} /> Başarılı İşlemler</>} styles={{ body: { padding: 0 } }}>
-                        <Table dataSource={rapor.basariliTahakkuklar} columns={basariliSutunlar} rowKey="isim" pagination={{ pageSize: 5 }} size="small" />
+                        <Table dataSource={rapor.basariliTahakkuklar || []} columns={basariliSutunlar} rowKey="isim" pagination={{ pageSize: 5 }} size="small" />
                     </Card>
                 </div>
             )}
