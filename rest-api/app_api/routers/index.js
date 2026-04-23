@@ -37,6 +37,10 @@ router.post('/attendance/upload', upload.single('file'), ctrlMesai.mesaiYukle);
 router.post('/payroll/:employeeId/calculate', ctrlMesai.hakedisHesapla);
 router.post('/puantaj/yukle', ctrlPuantaj.puantajYukle);
 
+// 🚀 YENİ EKLENEN: Dinamik Mesai Ayarları Rotaları
+router.get('/attendance/settings', ctrlPuantaj.ayarlarıGetir);
+router.post('/attendance/settings', ctrlPuantaj.ayarlarıGuncelle);
+
 // ---------------------------------------------------------
 // ⚙️ ÜRETİM ROTALARI
 // ---------------------------------------------------------
