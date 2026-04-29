@@ -48,11 +48,10 @@ const Raporlar = () => {
         }
     };
 
-    // 🚀 MİKRO MANTIĞI: Gelen veriyi Borç/Alacak olarak ayıran fonksiyonlar
+    // MİKRO MANTIĞI: Gelen veriyi Borç/Alacak olarak ayıran fonksiyonlar
     const isBorc = (islemTipi) => islemTipi === 'Ödeme' || islemTipi === 'Avans';
     const isAlacak = (islemTipi) => islemTipi === 'Hakediş' || islemTipi === 'Avans İadesi';
 
-    // 🚀 YENİ: Tamamen Klasik ERP Formatında Ekstre Sütunları
     const ekstreColumns = [
         {
             title: 'Tarih',
@@ -139,7 +138,6 @@ const Raporlar = () => {
         }
     ];
 
-    // --- DIŞA AKTARIM (ANA RAPOR) ---
     const exportAnaRaporExcel = () => {
         const excelData = data.liste.map(item => ({
             "Personel": item.adSoyad,
@@ -154,7 +152,6 @@ const Raporlar = () => {
         XLSX.writeFile(workbook, `Personel_Cari_Ozet_${dayjs().format('DD_MM_YYYY')}.xlsx`);
     };
 
-    // --- DIŞA AKTARIM (EKSTRE MODALI İÇİN) ---
     const exportEkstreExcel = () => {
         if (!ekstreData || ekstreData.length === 0) return message.warning("Veri yok!");
         const excelData = ekstreData.map(item => ({
@@ -243,7 +240,6 @@ const Raporlar = () => {
                 />
             </Card>
 
-            {/* 🚀 MÜŞTERİNİN İSTEDİĞİ KLASİK MİZAN (EKSTRE) EKRANI */}
             <Modal
                 title={
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: 30 }}>
@@ -269,9 +265,37 @@ const Raporlar = () => {
                     size="small"
                     bordered
                     style={{ marginTop: 15 }}
+                    // 🚀 İŞTE MÜŞTERİNİN İSTEDİĞİ EN ALTTAKİ GENEL TOPLAM SATIRI BURASI!
+                    summary={() => {
+                        let totalBorc = 0;
+                        let totalAlacak = 0;
+
+                        ekstreData.forEach(({ islemTipi, tutar }) => {
+                            if (isBorc(islemTipi)) totalBorc += Math.abs(tutar);
+                            if (isAlacak(islemTipi)) totalAlacak += Math.abs(tutar);
+                        });
+
+                        const netBakiye = seciliPersonel?.bakiye || 0;
+
+                        return (
+                            <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold', fontSize: '14px' }}>
+                                <Table.Summary.Cell index={0} colSpan={3} align="right">
+                                    GENEL TOPLAM:
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={1} align="right">
+                                    <Text type="danger">{totalBorc.toLocaleString('tr-TR')} ₺</Text>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={2} align="right">
+                                    <Text type="success">{totalAlacak.toLocaleString('tr-TR')} ₺</Text>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={3} align="right">
+                                    {netBakiye.toLocaleString('tr-TR')} ₺
+                                </Table.Summary.Cell>
+                            </Table.Summary.Row>
+                        );
+                    }}
                 />
             </Modal>
-
         </div>
     );
 };
