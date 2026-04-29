@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Table, Button, Space, Row, Col, Statistic, message, Tag, Divider } from 'antd';
-import { FilePdfOutlined, FileExcelOutlined, DollarOutlined, TransactionOutlined, WalletOutlined } from '@ant-design/icons';
+import { Card, Typography, Table, Button, Space, Row, Col, Statistic, message, Tag, Modal } from 'antd';
+import { FilePdfOutlined, FileExcelOutlined, DollarOutlined, TransactionOutlined, WalletOutlined, SearchOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -12,6 +12,12 @@ const { Title, Text } = Typography;
 const Raporlar = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    // 🚀 YENİ: Detay (Ekstre) Modalı Stateleri
+    const [isEkstreVisible, setIsEkstreVisible] = useState(false);
+    const [ekstreData, setEkstreData] = useState([]);
+    const [ekstreLoading, setEkstreLoading] = useState(false);
+    const [seciliPersonel, setSeciliPersonel] = useState(null);
 
     useEffect(() => {
         raporuCek();
@@ -26,6 +32,21 @@ const Raporlar = () => {
             message.error("Veriler alınamadı!");
         } finally {
             setLoading(false);
+        }
+    };
+
+    // 🚀 YENİ: Seçili personelin detaylı hesap hareketlerini getiren fonksiyon
+    const handleDetayGor = async (personel) => {
+        setSeciliPersonel(personel);
+        setIsEkstreVisible(true);
+        setEkstreLoading(true);
+        try {
+            const res = await axiosInstance.get(`/employees/${personel.id}/ekstre`);
+            setEkstreData(res.data);
+        } catch (error) {
+            message.error("Personel hareketleri alınamadı!");
+        } finally {
+            setEkstreLoading(false);
         }
     };
 
@@ -62,6 +83,58 @@ const Raporlar = () => {
                     {b?.toLocaleString('tr-TR')} ₺
                 </Tag>
             )
+        },
+        // 🚀 YENİ: Detay Butonu Sütunu
+        {
+            title: 'Aksiyon',
+            key: 'aksiyon',
+            align: 'center',
+            render: (_, record) => (
+                <Button
+                    type="dashed"
+                    icon={<SearchOutlined />}
+                    size="small"
+                    onClick={() => handleDetayGor(record)}
+                >
+                    Detayları Gör
+                </Button>
+            )
+        }
+    ];
+
+    // 🚀 YENİ: Detay (Ekstre) Tablosunun Sütunları
+    const ekstreColumns = [
+        {
+            title: 'Tarih',
+            dataIndex: 'islemTarihi',
+            render: val => dayjs(val).format('DD.MM.YYYY HH:mm')
+        },
+        {
+            title: 'İşlem',
+            dataIndex: 'islemTipi',
+            render: val => {
+                let color = 'default';
+                if (val === 'Hakediş') color = 'blue';
+                if (val === 'Ödeme' || val === 'Avans') color = 'red';
+                if (val === 'Avans İadesi') color = 'green';
+                return <Tag color={color}>{val}</Tag>;
+            }
+        },
+        {
+            title: 'Açıklama',
+            dataIndex: 'aciklama'
+        },
+        {
+            title: 'Tutar (₺)',
+            dataIndex: 'tutar',
+            align: 'right',
+            render: val => <b style={{ color: val < 0 ? '#cf1322' : '#3f8600' }}>{val} ₺</b>
+        },
+        {
+            title: 'Kalan Bakiye',
+            dataIndex: 'bakiyeSonrasi',
+            align: 'right',
+            render: val => <b>{val || 0} ₺</b>
         },
     ];
 
@@ -146,6 +219,26 @@ const Raporlar = () => {
                     size="middle"
                 />
             </Card>
+
+            {/* 🚀 YENİ: Personel Hareketleri (Detay) Modalı */}
+            <Modal
+                title={`${seciliPersonel?.adSoyad || ''} - Cari Hesap Dökümü`}
+                open={isEkstreVisible}
+                onCancel={() => setIsEkstreVisible(false)}
+                footer={null}
+                width={800}
+                destroyOnHidden
+            >
+                <Table
+                    columns={ekstreColumns}
+                    dataSource={ekstreData}
+                    rowKey="_id"
+                    loading={ekstreLoading}
+                    pagination={{ pageSize: 8 }}
+                    size="small"
+                />
+            </Modal>
+
         </div>
     );
 };
