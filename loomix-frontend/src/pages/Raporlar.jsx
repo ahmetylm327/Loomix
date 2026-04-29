@@ -13,7 +13,6 @@ const Raporlar = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // 🚀 YENİ: Detay (Ekstre) Modalı Stateleri
     const [isEkstreVisible, setIsEkstreVisible] = useState(false);
     const [ekstreData, setEkstreData] = useState([]);
     const [ekstreLoading, setEkstreLoading] = useState(false);
@@ -35,7 +34,6 @@ const Raporlar = () => {
         }
     };
 
-    // 🚀 YENİ: Seçili personelin detaylı hesap hareketlerini getiren fonksiyon
     const handleDetayGor = async (personel) => {
         setSeciliPersonel(personel);
         setIsEkstreVisible(true);
@@ -50,7 +48,52 @@ const Raporlar = () => {
         }
     };
 
-    const columns = [
+    // 🚀 MİKRO MANTIĞI: Gelen veriyi Borç/Alacak olarak ayıran fonksiyonlar
+    const isBorc = (islemTipi) => islemTipi === 'Ödeme' || islemTipi === 'Avans';
+    const isAlacak = (islemTipi) => islemTipi === 'Hakediş' || islemTipi === 'Avans İadesi';
+
+    // 🚀 YENİ: Tamamen Klasik ERP Formatında Ekstre Sütunları
+    const ekstreColumns = [
+        {
+            title: 'Tarih',
+            dataIndex: 'islemTarihi',
+            width: 130,
+            render: val => dayjs(val).format('DD.MM.YYYY HH:mm')
+        },
+        {
+            title: 'Evrak Cinsi',
+            dataIndex: 'islemTipi',
+            width: 150,
+            render: val => <b>{val === 'Hakediş' ? 'Personel Tahakkuku' : (val === 'Ödeme' ? 'Kasa Tediye Fişi' : val)}</b>
+        },
+        {
+            title: 'Açıklama',
+            dataIndex: 'aciklama'
+        },
+        {
+            title: 'TL Borç (Ödenen)',
+            dataIndex: 'tutar',
+            align: 'right',
+            width: 120,
+            render: (val, record) => isBorc(record.islemTipi) ? <Text type="danger">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-'
+        },
+        {
+            title: 'TL Alacak (Hakediş)',
+            dataIndex: 'tutar',
+            align: 'right',
+            width: 120,
+            render: (val, record) => isAlacak(record.islemTipi) ? <Text type="success">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-'
+        },
+        {
+            title: 'Bakiye',
+            dataIndex: 'bakiyeSonrasi',
+            align: 'right',
+            width: 120,
+            render: val => <b>{Number(val || 0).toLocaleString('tr-TR')} ₺</b>
+        },
+    ];
+
+    const anaTabloColumns = [
         {
             title: 'Personel',
             dataIndex: 'adSoyad',
@@ -84,82 +127,80 @@ const Raporlar = () => {
                 </Tag>
             )
         },
-        // 🚀 YENİ: Detay Butonu Sütunu
         {
-            title: 'Aksiyon',
+            title: 'Cari Hesap',
             key: 'aksiyon',
             align: 'center',
             render: (_, record) => (
-                <Button
-                    type="dashed"
-                    icon={<SearchOutlined />}
-                    size="small"
-                    onClick={() => handleDetayGor(record)}
-                >
-                    Detayları Gör
+                <Button type="dashed" icon={<SearchOutlined />} size="small" onClick={() => handleDetayGor(record)}>
+                    Ekstre Gör
                 </Button>
             )
         }
     ];
 
-    // 🚀 YENİ: Detay (Ekstre) Tablosunun Sütunları
-    const ekstreColumns = [
-        {
-            title: 'Tarih',
-            dataIndex: 'islemTarihi',
-            render: val => dayjs(val).format('DD.MM.YYYY HH:mm')
-        },
-        {
-            title: 'İşlem',
-            dataIndex: 'islemTipi',
-            render: val => {
-                let color = 'default';
-                if (val === 'Hakediş') color = 'blue';
-                if (val === 'Ödeme' || val === 'Avans') color = 'red';
-                if (val === 'Avans İadesi') color = 'green';
-                return <Tag color={color}>{val}</Tag>;
-            }
-        },
-        {
-            title: 'Açıklama',
-            dataIndex: 'aciklama'
-        },
-        {
-            title: 'Tutar (₺)',
-            dataIndex: 'tutar',
-            align: 'right',
-            render: val => <b style={{ color: val < 0 ? '#cf1322' : '#3f8600' }}>{val} ₺</b>
-        },
-        {
-            title: 'Kalan Bakiye',
-            dataIndex: 'bakiyeSonrasi',
-            align: 'right',
-            render: val => <b>{val || 0} ₺</b>
-        },
-    ];
-
-    const exportToExcel = () => {
+    // --- DIŞA AKTARIM (ANA RAPOR) ---
+    const exportAnaRaporExcel = () => {
         const excelData = data.liste.map(item => ({
             "Personel": item.adSoyad,
+            "Departman": item.departman,
             "Toplam Hakediş": item.toplamHakedis,
             "Toplam Ödenen": item.toplamOdenen,
             "Net Bakiye": item.bakiye
         }));
         const worksheet = XLSX.utils.json_to_sheet(excelData);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Cari_Rapor");
-        XLSX.writeFile(workbook, `Personel_Mizan_${dayjs().format('DD_MM_YYYY')}.xlsx`);
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Cari_Ozet");
+        XLSX.writeFile(workbook, `Personel_Cari_Ozet_${dayjs().format('DD_MM_YYYY')}.xlsx`);
     };
 
-    const exportToPDF = () => {
+    // --- DIŞA AKTARIM (EKSTRE MODALI İÇİN) ---
+    const exportEkstreExcel = () => {
+        if (!ekstreData || ekstreData.length === 0) return message.warning("Veri yok!");
+        const excelData = ekstreData.map(item => ({
+            "Tarih": dayjs(item.islemTarihi).format('DD.MM.YYYY HH:mm'),
+            "Evrak Cinsi": item.islemTipi === 'Hakediş' ? 'Personel Tahakkuku' : (item.islemTipi === 'Ödeme' ? 'Kasa Tediye Fişi' : item.islemTipi),
+            "Açıklama": item.aciklama || '-',
+            "TL Borç": isBorc(item.islemTipi) ? Math.abs(item.tutar) : 0,
+            "TL Alacak": isAlacak(item.islemTipi) ? Math.abs(item.tutar) : 0,
+            "Bakiye": item.bakiyeSonrasi || 0
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Hesap_Ekstresi");
+        XLSX.writeFile(workbook, `${seciliPersonel?.adSoyad}_Hesap_Ekstresi.xlsx`);
+    };
+
+    const exportEkstrePDF = () => {
+        if (!ekstreData || ekstreData.length === 0) return message.warning("Veri yok!");
         const doc = new jsPDF('p', 'pt', 'a4');
+        const isim = seciliPersonel?.adSoyad || 'Personel';
+
+        doc.setFontSize(14);
+        doc.text(`${isim} - Cari Hesap Ekstresi`, 40, 40);
+        doc.setFontSize(10);
+        doc.text(`Tarih: ${dayjs().format('DD.MM.YYYY')}`, 40, 55);
+
+        const tableColumn = ["Tarih", "Evrak Cinsi", "Aciklama", "Borc (TL)", "Alacak (TL)", "Bakiye"];
+        const tableRows = ekstreData.map(item => [
+            dayjs(item.islemTarihi).format('DD.MM.YYYY'),
+            item.islemTipi === 'Hakediş' ? 'Tahakkuk' : item.islemTipi,
+            item.aciklama || '-',
+            isBorc(item.islemTipi) ? Math.abs(item.tutar).toLocaleString('tr-TR') : '-',
+            isAlacak(item.islemTipi) ? Math.abs(item.tutar).toLocaleString('tr-TR') : '-',
+            Number(item.bakiyeSonrasi || 0).toLocaleString('tr-TR')
+        ]);
+
         autoTable(doc, {
-            head: [['Personel', 'Toplam Hakedis', 'Toplam Odenen', 'Net Bakiye']],
-            body: data.liste.map(i => [i.adSoyad, i.toplamHakedis + " TL", i.toplamOdenen + " TL", i.bakiye + " TL"]),
-            theme: 'striped',
-            headStyles: { fillColor: [22, 160, 133] }
+            head: [tableColumn],
+            body: tableRows,
+            startY: 70,
+            theme: 'grid',
+            headStyles: { fillColor: [89, 89, 89] },
+            styles: { fontSize: 8 }
         });
-        doc.save(`Personel_Cari_Rapor.pdf`);
+
+        doc.save(`${isim}_Ekstre.pdf`);
     };
 
     return (
@@ -169,49 +210,31 @@ const Raporlar = () => {
             <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
                 <Col xs={24} md={8}>
                     <Card style={{ borderTop: '4px solid #1890ff' }}>
-                        <Statistic
-                            title="Şirketin Toplam Borçlandığı"
-                            value={data?.ozet?.toplamBorc || 0}
-                            prefix={<TransactionOutlined />}
-                            suffix="₺"
-                        />
+                        <Statistic title="Şirketin Toplam Borçlandığı" value={data?.ozet?.toplamBorc || 0} prefix={<TransactionOutlined />} suffix="₺" />
                     </Card>
                 </Col>
                 <Col xs={24} md={8}>
                     <Card style={{ borderTop: '4px solid #cf1322' }}>
-                        <Statistic
-                            title="Şirketin Toplam Ödediği"
-                            value={data?.ozet?.toplamOdenen || 0}
-                            prefix={<DollarOutlined />}
-                            suffix="₺"
-                            valueStyle={{ color: '#cf1322' }}
-                        />
+                        <Statistic title="Şirketin Toplam Ödediği" value={data?.ozet?.toplamOdenen || 0} prefix={<DollarOutlined />} suffix="₺" valueStyle={{ color: '#cf1322' }} />
                     </Card>
                 </Col>
                 <Col xs={24} md={8}>
                     <Card style={{ borderTop: '4px solid #52c41a' }}>
-                        <Statistic
-                            title="Net Kalan Bakiye (Borç)"
-                            value={data?.ozet?.netKalan || 0}
-                            prefix={<WalletOutlined />}
-                            suffix="₺"
-                            valueStyle={{ color: data?.ozet?.netKalan > 0 ? '#cf1322' : '#3f8600' }}
-                        />
+                        <Statistic title="Net Kalan Bakiye (Borç)" value={data?.ozet?.netKalan || 0} prefix={<WalletOutlined />} suffix="₺" valueStyle={{ color: data?.ozet?.netKalan > 0 ? '#cf1322' : '#3f8600' }} />
                     </Card>
                 </Col>
             </Row>
 
             <Card
-                title="Personel Cari Dökümü"
+                title="Personel Cari Dökümü (Özet)"
                 extra={
-                    <Space>
-                        <Button type="primary" icon={<FilePdfOutlined />} danger onClick={exportToPDF}>PDF</Button>
-                        <Button type="primary" icon={<FileExcelOutlined />} style={{ background: '#52c41a', borderColor: '#52c41a' }} onClick={exportToExcel}>Excel</Button>
-                    </Space>
+                    <Button type="primary" icon={<FileExcelOutlined />} style={{ background: '#52c41a', borderColor: '#52c41a' }} onClick={exportAnaRaporExcel}>
+                        Özeti Excel'e Aktar
+                    </Button>
                 }
             >
                 <Table
-                    columns={columns}
+                    columns={anaTabloColumns}
                     dataSource={data?.liste || []}
                     loading={loading}
                     rowKey="id"
@@ -220,13 +243,21 @@ const Raporlar = () => {
                 />
             </Card>
 
-            {/* 🚀 YENİ: Personel Hareketleri (Detay) Modalı */}
+            {/* 🚀 MÜŞTERİNİN İSTEDİĞİ KLASİK MİZAN (EKSTRE) EKRANI */}
             <Modal
-                title={`${seciliPersonel?.adSoyad || ''} - Cari Hesap Dökümü`}
+                title={
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: 30 }}>
+                        <span>{seciliPersonel?.adSoyad || ''} - Detaylı Hesap Ekstresi</span>
+                        <Space>
+                            <Button size="small" icon={<FileExcelOutlined />} style={{ color: '#52c41a', borderColor: '#52c41a' }} onClick={exportEkstreExcel}>Excel</Button>
+                            <Button size="small" type="primary" danger icon={<FilePdfOutlined />} onClick={exportEkstrePDF}>PDF</Button>
+                        </Space>
+                    </div>
+                }
                 open={isEkstreVisible}
                 onCancel={() => setIsEkstreVisible(false)}
                 footer={null}
-                width={800}
+                width={900}
                 destroyOnHidden
             >
                 <Table
@@ -234,8 +265,10 @@ const Raporlar = () => {
                     dataSource={ekstreData}
                     rowKey="_id"
                     loading={ekstreLoading}
-                    pagination={{ pageSize: 8 }}
+                    pagination={{ pageSize: 12 }}
                     size="small"
+                    bordered
+                    style={{ marginTop: 15 }}
                 />
             </Modal>
 
