@@ -2,7 +2,7 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
 const Personel = mongoose.model('Personel');
-const PersonelHareket = mongoose.model('PersonelHareket'); // 🚀 BURASI EKLENDİ
+const PersonelHareket = mongoose.model('PersonelHareket'); // 🚀 YENİ EKLENDİ
 const Setting = mongoose.models.Setting || mongoose.model('Setting', new mongoose.Schema({
     key: { type: String, unique: true },
     value: mongoose.Schema.Types.Mixed
@@ -45,11 +45,16 @@ const puantajYukle = (req, res) => {
 
                 if (personel) {
                     if (!satir.GirisSaati || !satir.CikisSaati) {
+                        let hataNedeni = "";
+                        if (!satir.GirisSaati && !satir.CikisSaati) hataNedeni = "Hiç basmamış (Giriş/Çıkış Yok)";
+                        else if (!satir.GirisSaati) hataNedeni = "Girişte basmayı unutmuş";
+                        else if (!satir.CikisSaati) hataNedeni = "Çıkışta basmayı unutmuş";
+
                         eksikBasimlar.push({
                             isim: satir.AdSoyad,
                             giris: satir.GirisSaati || '-',
                             cikis: satir.CikisSaati || '-',
-                            mesaj: !satir.GirisSaati ? "Giriş Yok" : "Çıkış Yok"
+                            mesaj: hataNedeni
                         });
                         continue;
                     }
@@ -83,10 +88,10 @@ const puantajYukle = (req, res) => {
                         personel.bakiye = (personel.bakiye || 0) + gunlukHakedis;
                         await personel.save();
 
-                        // 🚀 2. RAPORLAR İÇİN HAREKET KAYDI OLUŞTUR (Borçlanma Kaydı)
+                        // 🚀 2. RAPORLAR İÇİN HAREKET KAYDI OLUŞTUR
                         await PersonelHareket.create({
                             personelId: personel._id,
-                            islemTipi: 'Hakediş', // Raporun "Borç" olarak saydığı tip
+                            islemTipi: 'Hakediş',
                             tutar: Math.round(gunlukHakedis),
                             bakiyeSonrasi: Math.round(personel.bakiye),
                             aciklama: `Puantaj: ${satir.GirisSaati}-${satir.CikisSaati} Çalışması`
@@ -96,7 +101,8 @@ const puantajYukle = (req, res) => {
                             isim: personel.adSoyad,
                             tahakkukTutar: Math.round(gunlukHakedis),
                             gun: (calismaSaati / 10).toFixed(1),
-                            yeniBakiye: Math.round(personel.bakiye)
+                            yeniBakiye: Math.round(personel.bakiye),
+                            toleransUygulandiMi: gecikmeSuresi > 0 && gecikmeSuresi <= tolerans
                         });
                     }
                 } else {
@@ -108,7 +114,7 @@ const puantajYukle = (req, res) => {
             }
 
             res.status(200).json({
-                mesaj: "Puantaj işlendi ve hakedişler raporlara yansıtıldı.",
+                mesaj: "Puantaj başarıyla işlendi!",
                 ozet: { basariliTahakkuklar, sistemdeBulunamayanlar: Object.values(bulunamayanlarMap), eksikBasimlar }
             });
 
@@ -118,4 +124,29 @@ const puantajYukle = (req, res) => {
     });
 };
 
-module.exports = { puantajYukle };
+const ayarlarıGuncelle = async (req, res) => {
+    try {
+        await Setting.findOneAndUpdate(
+            { key: 'mesai_ayarlari' },
+            { value: req.body },
+            { upsert: true }
+        );
+        res.status(200).json({ mesaj: "Mesai ayarları güncellendi!" });
+    } catch (e) { res.status(500).json({ mesaj: "Hata" }); }
+};
+
+const ayarlarıGetir = async (req, res) => {
+    try {
+        const settings = await Setting.findOne({ key: 'mesai_ayarlari' });
+        if (settings) {
+            res.status(200).json(settings.value);
+        } else {
+            res.status(200).json({ baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 });
+        }
+    } catch (e) {
+        res.status(500).json({ mesaj: "Ayarlar çekilemedi" });
+    }
+};
+
+// 🚀 EKSİK OLAN EXPORTLAR GERİ GELDİ
+module.exports = { puantajYukle, ayarlarıGuncelle, ayarlarıGetir };
