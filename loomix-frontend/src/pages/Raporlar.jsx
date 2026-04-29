@@ -275,7 +275,7 @@ const Raporlar = () => {
                             if (isAlacak(islemTipi)) totalAlacak += Math.abs(tutar);
                         });
 
-                        const netBakiye = seciliPersonel?.bakiye || 0;
+                        const netBakiye = totalAlacak - totalBorc;
 
                         return (
                             <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold', fontSize: '14px' }}>
@@ -289,7 +289,10 @@ const Raporlar = () => {
                                     <Text type="success">{totalAlacak.toLocaleString('tr-TR')} ₺</Text>
                                 </Table.Summary.Cell>
                                 <Table.Summary.Cell index={3} align="right">
-                                    {netBakiye.toLocaleString('tr-TR')} ₺
+                                    {/* Bakiye eksi ise yeşil, artı ise kırmızı (şirket borcu) yanacak */}
+                                    <span style={{ color: netBakiye > 0 ? '#cf1322' : (netBakiye < 0 ? '#3f8600' : '#000') }}>
+                                        {netBakiye.toLocaleString('tr-TR')} ₺
+                                    </span>
                                 </Table.Summary.Cell>
                             </Table.Summary.Row>
                         );
