@@ -2,7 +2,7 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
 const Personel = mongoose.model('Personel');
-const PersonelHareket = mongoose.model('PersonelHareket'); // 🚀 YENİ EKLENDİ
+const PersonelHareket = mongoose.model('PersonelHareket');
 const Setting = mongoose.models.Setting || mongoose.model('Setting', new mongoose.Schema({
     key: { type: String, unique: true },
     value: mongoose.Schema.Types.Mixed
@@ -76,10 +76,11 @@ const puantajYukle = (req, res) => {
                         }
 
                         const calismaSaati = toplamDakika / 60;
+                        const gunlukKatsayi = calismaSaati / 10; // Kaç günlük mesai yaptı? (Örn: 1.0 veya 0.8)
                         let gunlukHakedis = 0;
 
                         if (personel.ucretTipi === 'Günlük') {
-                            gunlukHakedis = calismaSaati * (personel.ucretMiktari / 10);
+                            gunlukHakedis = gunlukKatsayi * personel.ucretMiktari;
                         } else {
                             gunlukHakedis = calismaSaati * personel.ucretMiktari;
                         }
@@ -88,19 +89,23 @@ const puantajYukle = (req, res) => {
                         personel.bakiye = (personel.bakiye || 0) + gunlukHakedis;
                         await personel.save();
 
-                        // 🚀 2. RAPORLAR İÇİN HAREKET KAYDI OLUŞTUR
+                        // 🚀 2. MÜŞTERİNİN İSTEDİĞİ RESMİ TAHAKKUK AÇIKLAMASI
+                        // Excel'de "Tarih" sütunu varsa onu alır, yoksa bugünün tarihini atar.
+                        const islemTarihiMetni = satir.Tarih || new Date().toLocaleDateString('tr-TR');
+                        const resmiAciklama = `${islemTarihiMetni} Puantajı: ${gunlukKatsayi.toFixed(1)} Günlük Çalışma Tahakkuku (${satir.GirisSaati} - ${satir.CikisSaati})`;
+
                         await PersonelHareket.create({
                             personelId: personel._id,
                             islemTipi: 'Hakediş',
                             tutar: Math.round(gunlukHakedis),
                             bakiyeSonrasi: Math.round(personel.bakiye),
-                            aciklama: `Puantaj: ${satir.GirisSaati}-${satir.CikisSaati} Çalışması`
+                            aciklama: resmiAciklama
                         });
 
                         basariliTahakkuklar.push({
                             isim: personel.adSoyad,
                             tahakkukTutar: Math.round(gunlukHakedis),
-                            gun: (calismaSaati / 10).toFixed(1),
+                            gun: gunlukKatsayi.toFixed(1),
                             yeniBakiye: Math.round(personel.bakiye),
                             toleransUygulandiMi: gecikmeSuresi > 0 && gecikmeSuresi <= tolerans
                         });
@@ -114,7 +119,7 @@ const puantajYukle = (req, res) => {
             }
 
             res.status(200).json({
-                mesaj: "Puantaj başarıyla işlendi!",
+                mesaj: "Puantaj başarıyla işlendi ve tahakkuklar deftere yazıldı!",
                 ozet: { basariliTahakkuklar, sistemdeBulunamayanlar: Object.values(bulunamayanlarMap), eksikBasimlar }
             });
 
@@ -148,5 +153,4 @@ const ayarlarıGetir = async (req, res) => {
     }
 };
 
-// 🚀 EKSİK OLAN EXPORTLAR GERİ GELDİ
 module.exports = { puantajYukle, ayarlarıGuncelle, ayarlarıGetir };
