@@ -165,4 +165,44 @@ const getPersonelEkstre = async (req, res) => {
     }
 };
 
-module.exports = { personelEkle, personelListele, personelGuncelle, personelSil, personelOdemeYap, topluMaasOde, getPersonelEkstre };
+const personelTahsilatYap = async (req, res) => {
+    const { employeeId } = req.params;
+    const tutar = Number(req.body.miktar || req.body.tutar);
+
+    try {
+        const personel = await Personel.findById(employeeId);
+        if (!personel) return res.status(404).json({ mesaj: "Personel bulunamadı" });
+        if (tutar <= 0) return res.status(400).json({ mesaj: "Geçerli bir tutar girin." });
+
+        // İşçi parayı iade ettiği için bakiyesi (alacağı) tekrar artı yönde hareket eder
+        personel.bakiye = (personel.bakiye || 0) + tutar;
+        await personel.save();
+
+        if (PersonelHareket) {
+            await PersonelHareket.create({
+                personelId: employeeId,
+                islemTipi: 'Avans İadesi',
+                tutar: tutar, // Pozitif yansır
+                bakiyeSonrasi: personel.bakiye,
+                aciklama: req.body.notlar || 'Personelden Nakit Avans İadesi Alındı'
+            });
+        }
+
+        // KASAYA PARA GİRİYOR (Gelir İşlemi)
+        await Odeme.create({
+            islemYonu: 'Gelir',
+            odemeTipi: 'Nakit/Banka',
+            tutar: tutar,
+            kategori: 'Avans İadesi',
+            ilgiliId: employeeId,
+            odemeTarihi: new Date(),
+            notlar: `${personel.adSoyad} adlı personelden avans iadesi alındı.`
+        });
+
+        res.status(200).json({ mesaj: "Avans iadesi başarıyla alındı.", bakiye: personel.bakiye });
+    } catch (error) {
+        res.status(500).json({ mesaj: "İşlem sırasında hata oluştu", detay: error.message });
+    }
+};
+
+module.exports = { personelEkle, personelListele, personelGuncelle, personelSil, personelOdemeYap, topluMaasOde, getPersonelEkstre, personelTahsilatYap };

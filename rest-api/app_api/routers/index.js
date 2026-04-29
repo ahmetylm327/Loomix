@@ -29,6 +29,7 @@ router.put('/employees/:employeeId', ctrlPersonel.personelGuncelle);
 router.delete('/employees/:employeeId', ctrlPersonel.personelSil);
 router.post('/employees/:employeeId/pay', ctrlPersonel.personelOdemeYap);
 router.get('/employees/:employeeId/ekstre', ctrlPersonel.getPersonelEkstre);
+router.post('/employees/:employeeId/refund', ctrlPersonel.personelTahsilatYap);
 
 // ---------------------------------------------------------
 // 🕒 MESAİ VE PUANTAJ ROTALARI

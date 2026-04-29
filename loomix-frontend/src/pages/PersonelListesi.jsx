@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Tag, Card, Typography, message, Button, Modal, Form, Input, Select, InputNumber, Dropdown, Divider, Space, Row, Col, Statistic, Alert } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined, CalculatorOutlined, MoreOutlined, FilePdfOutlined, FileExcelOutlined, FileTextOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined, CalculatorOutlined, MoreOutlined, FilePdfOutlined, FileExcelOutlined, FileTextOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, RollbackOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -26,6 +26,11 @@ const PersonelListesi = () => {
     const [selectedPersonel, setSelectedPersonel] = useState(null);
     const [tahakkukForm] = Form.useForm();
     const [tahakkukLoading, setTahakkukLoading] = useState(false);
+
+    // 🚀 YENİ: Avans İadesi Stateleri
+    const [isRefundModalVisible, setIsRefundModalVisible] = useState(false);
+    const [refundEmployee, setRefundEmployee] = useState(null);
+    const [refundAmount, setRefundAmount] = useState(0);
 
     const [selectedRowKeys, setSelectedRowKeys] = useState([]);
     const [isEkstreVisible, setIsEkstreVisible] = useState(false);
@@ -121,6 +126,21 @@ const PersonelListesi = () => {
             fetchData();
         } catch (error) {
             message.error("Ödeme yapılamadı!");
+        }
+    };
+
+    // 🚀 YENİ: Avans İadesi Fonksiyonu
+    const handleRefund = async () => {
+        if (!refundAmount || refundAmount <= 0) return message.warning("Lütfen geçerli bir tutar girin.");
+        try {
+            const id = refundEmployee.employeeId || refundEmployee._id;
+            await axiosInstance.post(`/employees/${id}/refund`, { miktar: refundAmount });
+            message.success(`${refundEmployee.adSoyad || refundEmployee.fullname} adlı personelden ${refundAmount} ₺ tahsil edildi!`);
+            setIsRefundModalVisible(false);
+            setRefundAmount(0);
+            fetchData();
+        } catch (error) {
+            message.error("İade işlemi yapılamadı!");
         }
     };
 
@@ -226,7 +246,7 @@ const PersonelListesi = () => {
 
     const ekstreColumns = [
         { title: 'Tarih', dataIndex: 'islemTarihi', render: (val) => dayjs(val).format('DD.MM.YYYY') },
-        { title: 'İşlem', dataIndex: 'islemTipi', render: (val) => <Tag color={val === 'Ödeme' ? 'red' : 'green'}>{val}</Tag> },
+        { title: 'İşlem', dataIndex: 'islemTipi', render: (val) => <Tag color={val === 'Ödeme' ? 'red' : (val === 'Avans İadesi' ? 'blue' : 'green')}>{val}</Tag> },
         { title: 'Tutar', dataIndex: 'tutar', render: (val) => <b style={{ color: val < 0 ? '#cf1322' : '#3f8600' }}>{val} ₺</b> },
         { title: 'Açıklama', dataIndex: 'aciklama' },
     ];
@@ -243,7 +263,7 @@ const PersonelListesi = () => {
             )
         },
         {
-            title: 'Maliyet & Bakiye',
+            title: 'Cari Durum (Maliyet & Bakiye)',
             key: 'hesap',
             render: (_, record) => {
                 const bakiye = record.bakiye || record.balance || 0;
@@ -251,12 +271,20 @@ const PersonelListesi = () => {
                 const tip = record.ucretTipi || (record.wage_type === 'Hourly' ? 'Saatlik' : 'Günlük');
                 const tipColor = tip === 'Saatlik' ? 'purple' : 'cyan';
 
+                // 🚀 YENİ: Mikro Mantığı Borç/Alacak Görünümü
+                let bakiyeEtiket;
+                if (bakiye > 0) {
+                    bakiyeEtiket = <Tag color="error" style={{ fontSize: '13px', padding: '2px 8px' }}>Bizden Alacaklı: {bakiye} ₺</Tag>;
+                } else if (bakiye < 0) {
+                    bakiyeEtiket = <Tag color="success" style={{ fontSize: '13px', padding: '2px 8px' }}>Bize Borçlu: {Math.abs(bakiye)} ₺</Tag>;
+                } else {
+                    bakiyeEtiket = <Tag color="default" style={{ fontSize: '13px', padding: '2px 8px' }}>Bakiye Sıfır</Tag>;
+                }
+
                 return (
                     <div>
-                        <Tag color={bakiye > 0 ? "error" : "success"} style={{ fontSize: '13px', padding: '2px 8px', marginBottom: '4px' }}>
-                            İçerideki: {bakiye} ₺
-                        </Tag><br />
-                        <span style={{ fontSize: '12px', color: '#595959' }}>
+                        {bakiyeEtiket}<br />
+                        <span style={{ fontSize: '12px', color: '#595959', marginTop: '4px', display: 'inline-block' }}>
                             <Tag color={tipColor} bordered={false} style={{ fontSize: '10px', padding: '0 4px', marginRight: 4 }}>{tip}</Tag>
                             {ucret} ₺
                         </span>
@@ -272,7 +300,8 @@ const PersonelListesi = () => {
             render: (_, record) => {
                 const items = [
                     { key: '1', label: 'Manuel Tahakkuk', icon: <CalculatorOutlined style={{ color: '#1890ff' }} />, onClick: () => showTahakkukModal(record) },
-                    { key: '2', label: 'Avans/Maaş Öde', icon: <WalletOutlined style={{ color: '#52c41a' }} />, onClick: () => { setPayEmployee(record); setPayAmount(0); setIsPayModalVisible(true); } },
+                    { key: '2', label: 'Avans / Maaş Öde', icon: <WalletOutlined style={{ color: '#cf1322' }} />, onClick: () => { setPayEmployee(record); setPayAmount(0); setIsPayModalVisible(true); } },
+                    { key: '6', label: 'Avans İadesi Al', icon: <RollbackOutlined style={{ color: '#52c41a' }} />, onClick: () => { setRefundEmployee(record); setRefundAmount(0); setIsRefundModalVisible(true); } },
                     { key: '5', label: 'Hesap Ekstresi', icon: <FileTextOutlined style={{ color: '#fa8c16' }} />, onClick: () => fetchEkstre(record) },
                     { type: 'divider' },
                     { key: '3', label: 'Düzenle', icon: <EditOutlined />, onClick: () => showEditModal(record) },
@@ -287,15 +316,13 @@ const PersonelListesi = () => {
         }
     ];
 
-    // İstatistik Hesaplamaları (Dashboard için)
-    const toplamIceridekiPara = data.reduce((acc, curr) => acc + (curr.bakiye || 0), 0);
+    const toplamIceridekiPara = data.filter(d => d.bakiye > 0).reduce((acc, curr) => acc + (curr.bakiye || 0), 0);
     const saatlikCalisanSayisi = data.filter(d => d.ucretTipi === 'Saatlik' || d.wage_type === 'Hourly').length;
     const gunlukCalisanSayisi = data.length - saatlikCalisanSayisi;
 
     return (
         <div style={{ padding: '15px', background: '#f0f2f5', minHeight: '100vh' }}>
 
-            {/* 🚀 YENİ: FİNANSAL DASHBOARD KARTLARI */}
             <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
                 <Col xs={24} sm={8}>
                     <Card style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderLeft: '4px solid #1890ff' }}>
@@ -308,14 +335,14 @@ const PersonelListesi = () => {
                 </Col>
                 <Col xs={24} sm={8}>
                     <Card style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderLeft: '4px solid #cf1322' }}>
-                        <Statistic title="Ödenecek Toplam Bakiye (Borç)" value={toplamIceridekiPara} prefix={<DollarOutlined />} suffix="₺" styles={{ content: { color: '#cf1322', fontWeight: 'bold' } }} />
+                        <Statistic title="Ödenecek Toplam Bakiye (Şirket Borcu)" value={toplamIceridekiPara} prefix={<DollarOutlined />} suffix="₺" styles={{ content: { color: '#cf1322', fontWeight: 'bold' } }} />
                     </Card>
                 </Col>
             </Row>
 
             <Card variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)', padding: '5px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: 15 }}>
-                    <Title level={4} style={{ margin: 0 }}>Personel & Maliyet Yönetimi</Title>
+                    <Title level={4} style={{ margin: 0 }}>Personel Cari & Maliyet Yönetimi</Title>
 
                     <Space>
                         {selectedRowKeys.length > 0 && (
@@ -344,15 +371,7 @@ const PersonelListesi = () => {
                 />
             </Card>
 
-            <Modal
-                title={editingEmployee ? "Personel Güncelle" : "Yeni Personel Kaydı"}
-                open={isModalVisible}
-                onCancel={() => setIsModalVisible(false)}
-                onOk={() => form.submit()}
-                okText="Kaydet"
-                cancelText="Vazgeç"
-                destroyOnHidden
-            >
+            <Modal title={editingEmployee ? "Personel Güncelle" : "Yeni Personel Kaydı"} open={isModalVisible} onCancel={() => setIsModalVisible(false)} onOk={() => form.submit()} okText="Kaydet" cancelText="Vazgeç" destroyOnHidden>
                 <Form form={form} layout="vertical" onFinish={handleSave} style={{ marginTop: 15 }}>
                     <Form.Item name="adSoyad" label="Ad Soyad" rules={[{ required: true }]}><Input /></Form.Item>
                     <Form.Item name="pozisyon" label="Görev / Pozisyon" rules={[{ required: true }]}><Input /></Form.Item>
@@ -367,38 +386,35 @@ const PersonelListesi = () => {
                 </Form>
             </Modal>
 
-            <Modal
-                title={<><WalletOutlined style={{ color: '#52c41a' }} /> Avans / Maaş Ödemesi</>}
-                open={isPayModalVisible}
-                onCancel={() => setIsPayModalVisible(false)}
-                onOk={handlePayment}
-                okText="Ödemeyi Tamamla"
-                cancelText="Vazgeç"
-                okButtonProps={{ style: { background: '#52c41a', borderColor: '#52c41a' } }}
-                destroyOnHidden
-            >
+            {/* 💸 ÖDEME YAPMA MODALI (Şirketten Çıkan Para) */}
+            <Modal title={<><WalletOutlined style={{ color: '#cf1322' }} /> Personele Ödeme Yap</>} open={isPayModalVisible} onCancel={() => setIsPayModalVisible(false)} onOk={handlePayment} okText="Ödemeyi Tamamla" cancelText="Vazgeç" okButtonProps={{ danger: true }} destroyOnHidden>
                 {payEmployee && (
                     <div style={{ textAlign: 'center', padding: '15px 0' }}>
                         <Title level={4} style={{ marginBottom: 5 }}>{payEmployee.adSoyad || payEmployee.fullname}</Title>
-                        <p style={{ color: '#8c8c8c' }}>İçerideki Alacağı: <b style={{ color: '#cf1322', fontSize: '16px' }}>{payEmployee.bakiye || payEmployee.balance || 0} ₺</b></p>
-                        <Divider style={{ margin: '15px 0' }} />
+                        <p style={{ color: '#8c8c8c' }}>İçerideki Alacağı: <b style={{ color: payEmployee.bakiye > 0 ? '#cf1322' : '#52c41a', fontSize: '16px' }}>{payEmployee.bakiye || 0} ₺</b></p>
+                        <Alert message="DİKKAT: Bu işlem şirketin kasasından para çıkarır." type="error" showIcon style={{ marginBottom: 15, textAlign: 'left' }} />
                         <p style={{ marginBottom: 5 }}>Ödenecek Tutar (₺):</p>
                         <InputNumber style={{ width: '100%', maxWidth: '250px' }} size="large" min={0} value={payAmount} onChange={(value) => setPayAmount(value)} />
                     </div>
                 )}
             </Modal>
 
-            <Modal
-                title={selectedPersonel ? `${selectedPersonel.adSoyad || selectedPersonel.fullname} - Manuel Tahakkuk` : "Tahakkuk İşlemi"}
-                open={isTahakkukModalVisible}
-                onCancel={() => setIsTahakkukModalVisible(false)}
-                footer={null}
-                destroyOnHidden
-            >
+            {/* ♻️ AVANS İADESİ MODALI (Şirkete Giren Para) */}
+            <Modal title={<><RollbackOutlined style={{ color: '#52c41a' }} /> Avans İadesi Al / Tahsilat</>} open={isRefundModalVisible} onCancel={() => setIsRefundModalVisible(false)} onOk={handleRefund} okText="Tahsilatı Kaydet" cancelText="Vazgeç" okButtonProps={{ style: { background: '#52c41a', borderColor: '#52c41a' } }} destroyOnHidden>
+                {refundEmployee && (
+                    <div style={{ textAlign: 'center', padding: '15px 0' }}>
+                        <Title level={4} style={{ marginBottom: 5 }}>{refundEmployee.adSoyad || refundEmployee.fullname}</Title>
+                        <p style={{ color: '#8c8c8c' }}>Personele Olan Güncel Borcumuz: <b style={{ color: refundEmployee.bakiye > 0 ? '#cf1322' : '#52c41a', fontSize: '16px' }}>{refundEmployee.bakiye || 0} ₺</b></p>
+                        <Alert message="Bu işlem çalışanın şirkete nakit para getirdiğini varsayar. Kasaya GELİR olarak yansır." type="success" showIcon style={{ marginBottom: 15, textAlign: 'left' }} />
+                        <p style={{ marginBottom: 5 }}>Alınan İade Tutarı (₺):</p>
+                        <InputNumber style={{ width: '100%', maxWidth: '250px' }} size="large" min={0} value={refundAmount} onChange={(value) => setRefundAmount(value)} />
+                    </div>
+                )}
+            </Modal>
+
+            <Modal title={selectedPersonel ? `${selectedPersonel.adSoyad || selectedPersonel.fullname} - Manuel Tahakkuk` : "Tahakkuk İşlemi"} open={isTahakkukModalVisible} onCancel={() => setIsTahakkukModalVisible(false)} footer={null} destroyOnHidden>
                 <div style={{ marginBottom: 20, padding: 15, backgroundColor: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 5 }}>
-                    <p style={{ margin: 0 }}>
-                        <b>Kayıtlı {selectedPersonel?.ucretTipi} Ücreti:</b> {selectedPersonel?.ucretMiktari || selectedPersonel?.daily_wage} ₺
-                    </p>
+                    <p style={{ margin: 0 }}><b>Kayıtlı {selectedPersonel?.ucretTipi} Ücreti:</b> {selectedPersonel?.ucretMiktari || selectedPersonel?.daily_wage} ₺</p>
                     <p style={{ margin: 0, color: '#cf1322' }}><b>Mevcut Alacak:</b> {selectedPersonel?.bakiye || selectedPersonel?.balance || 0} ₺</p>
                 </div>
                 <Form form={tahakkukForm} layout="vertical" onFinish={handleTahakkukSubmit}>
@@ -414,19 +430,11 @@ const PersonelListesi = () => {
                 </Form>
             </Modal>
 
-            <Modal
-                title={`${ekstrePersonel?.adSoyad || ekstrePersonel?.fullname} - Hesap Ekstresi`}
-                open={isEkstreVisible}
-                onCancel={() => setIsEkstreVisible(false)}
-                footer={null}
-                width={700}
-                destroyOnHidden
-            >
+            <Modal title={`${ekstrePersonel?.adSoyad || ekstrePersonel?.fullname} - Hesap Ekstresi`} open={isEkstreVisible} onCancel={() => setIsEkstreVisible(false)} footer={null} width={700} destroyOnHidden>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '15px' }}>
                     <Button icon={<FileExcelOutlined />} onClick={exportToExcel} style={{ color: '#52c41a', borderColor: '#52c41a' }}>Excel İndir</Button>
                     <Button type="primary" danger icon={<FilePdfOutlined />} onClick={exportToPDF}>PDF İndir</Button>
                 </div>
-
                 <Table columns={ekstreColumns} dataSource={ekstreData} rowKey="_id" loading={ekstreLoading} pagination={{ pageSize: 8 }} size="small" />
             </Modal>
         </div>
