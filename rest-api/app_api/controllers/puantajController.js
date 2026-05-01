@@ -39,8 +39,6 @@ const timeToMinutes = (timeVal) => {
     return 0;
 };
 
-// 🚀 ÇELİK YELEK: Türkçe Karakter ve Boşluk Temizleyici
-// Ne yazarsan yaz (Örn: "Adı Soyadı"), bu fonksiyon onu tertemiz "adisoyadi" yapar!
 const metinTemizle = (metin) => {
     if (!metin) return '';
     return metin.toString().toLowerCase()
@@ -62,15 +60,16 @@ const puantajYukle = (req, res) => {
             const { baslangic, bitis, molaBas, molaBit, tolerans } = settings.value;
 
             const mesaiBaslangicDakika = timeToMinutes(baslangic);
+            const mesaiBitisDakika = timeToMinutes(bitis);
             const molaBasDakika = timeToMinutes(molaBas);
             const molaBitDakika = timeToMinutes(molaBit);
             const molaSure = molaBitDakika - molaBasDakika;
+            const standartGunlukSaat = (mesaiBitisDakika - mesaiBaslangicDakika - molaSure) / 60;
 
             const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const excelVerisiRaw = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-            // Eğer dosya tamamen boşsa kullanıcıyı uyar
             if (!excelVerisiRaw || excelVerisiRaw.length === 0) {
                 return res.status(400).json({ mesaj: "Excel dosyasının içi boş veya sadece başlıklar var!" });
             }
@@ -79,10 +78,12 @@ const puantajYukle = (req, res) => {
             let eksikBasimlar = [];
             let bulunamayanlarMap = {};
 
+            // 🚀 BÜYÜK YENİLİK: İşçileri gruplamak için sepet oluşturduk
+            let islenenPersoneller = {};
+
             for (let rawSatir of excelVerisiRaw) {
                 let satir = { AdSoyad: null, GirisSaati: null, CikisSaati: null, Tarih: null, Gun: null, Tutar: null };
 
-                // Ultra esnek sütun okuyucu (Türkçe dahil tüm varyasyonları yakalar)
                 for (let key in rawSatir) {
                     if (rawSatir[key] === null) continue;
 
@@ -106,80 +107,72 @@ const puantajYukle = (req, res) => {
 
                 if (personel) {
                     let gunlukHakedis = 0;
-                    let aciklamaDetay = "";
+                    let gunKatsayi = 0;
                     let islemGecerli = false;
-
                     const ucret = Number(personel.ucretMiktari) || 0;
 
                     if (satir.Tutar) {
                         let temizTutar = satir.Tutar.toString().replace(/\./g, '').replace(',', '.');
                         gunlukHakedis = Number(temizTutar) || 0;
-                        aciklamaDetay = `Manuel Puantaj Tutarı İşlendi`;
                         islemGecerli = true;
                     }
                     else if (satir.Gun) {
-                        let gunKatsayi = Number(satir.Gun.toString().replace(',', '.')) || 1;
+                        gunKatsayi = Number(satir.Gun.toString().replace(',', '.')) || 1;
                         gunlukHakedis = gunKatsayi * ucret;
-                        aciklamaDetay = `${gunKatsayi} Günlük Çalışma Tahakkuku`;
                         islemGecerli = true;
                     }
                     else if (satir.GirisSaati != null && satir.CikisSaati != null) {
                         const gercekGiris = timeToMinutes(satir.GirisSaati);
-                        const cikis = timeToMinutes(satir.CikisSaati);
+                        const gercekCikis = timeToMinutes(satir.CikisSaati);
 
-                        if (gercekGiris > 0 && cikis > gercekGiris) {
+                        if (gercekGiris > 0 && gercekCikis > gercekGiris) {
                             let islemGorecekGiris = gercekGiris;
-                            const gecikmeSuresi = gercekGiris - mesaiBaslangicDakika;
-                            if (gecikmeSuresi > 0 && gecikmeSuresi <= (tolerans || 0)) islemGorecekGiris = mesaiBaslangicDakika;
+                            let islemGorecekCikis = gercekCikis;
 
-                            let toplamDakika = cikis - islemGorecekGiris;
-                            if (islemGorecekGiris <= molaBasDakika && cikis >= molaBitDakika) toplamDakika -= molaSure;
+                            if (gercekGiris < mesaiBaslangicDakika) islemGorecekGiris = mesaiBaslangicDakika;
+                            else {
+                                const gecikmeSuresi = gercekGiris - mesaiBaslangicDakika;
+                                if (gecikmeSuresi <= (tolerans || 0)) islemGorecekGiris = mesaiBaslangicDakika;
+                            }
 
-                            const calismaSaati = toplamDakika / 60;
-                            const gunKatsayi = calismaSaati / 10;
+                            if (gercekCikis > mesaiBitisDakika) islemGorecekCikis = mesaiBitisDakika;
 
-                            if (personel.ucretTipi === 'Günlük') gunlukHakedis = gunKatsayi * ucret;
-                            else if (personel.ucretTipi === 'Saatlik') gunlukHakedis = calismaSaati * ucret;
-                            else gunlukHakedis = calismaSaati * (ucret / 260);
+                            let toplamDakika = islemGorecekCikis - islemGorecekGiris;
 
-                            aciklamaDetay = `${gunKatsayi.toFixed(1)} Günlük Çalışma Tahakkuku (${satir.GirisSaati} - ${satir.CikisSaati})`;
-                            islemGecerli = true;
+                            if (toplamDakika > 0) {
+                                if (islemGorecekGiris <= molaBasDakika && islemGorecekCikis >= molaBitDakika) toplamDakika -= molaSure;
+
+                                const calismaSaati = toplamDakika / 60;
+                                gunKatsayi = calismaSaati / standartGunlukSaat;
+
+                                if (gunKatsayi > 1) gunKatsayi = 1;
+
+                                if (personel.ucretTipi === 'Günlük') gunlukHakedis = gunKatsayi * ucret;
+                                else if (personel.ucretTipi === 'Saatlik') gunlukHakedis = calismaSaati * ucret;
+                                else gunlukHakedis = gunKatsayi * ucret;
+
+                                islemGecerli = true;
+                            }
                         }
                     }
 
+                    // 🚀 EĞER SATIR GEÇERLİYSE, DEFTRE YAZMA. ÖNCE SEPETE EKLE! (GRUPLAMA)
                     if (islemGecerli && gunlukHakedis > 0) {
-                        const hakedisNum = Math.round(Number(gunlukHakedis) || 0);
-
-                        personel.bakiye = (personel.bakiye || 0) + hakedisNum;
-                        await personel.save();
-
-                        let islemTarihiMetni = new Date().toLocaleDateString('tr-TR');
-                        if (satir.Tarih) {
-                            if (typeof satir.Tarih === 'number') {
-                                const excelTarihi = new Date((satir.Tarih - 25569) * 86400 * 1000);
-                                islemTarihiMetni = excelTarihi.toLocaleDateString('tr-TR');
-                            } else {
-                                islemTarihiMetni = satir.Tarih.toString();
-                            }
+                        if (!islenenPersoneller[personel._id]) {
+                            islenenPersoneller[personel._id] = {
+                                personel: personel,
+                                toplamHakedis: 0,
+                                toplamGun: 0,
+                                tarihler: []
+                            };
                         }
 
-                        if (PersonelHareket) {
-                            await PersonelHareket.create({
-                                personelId: personel._id,
-                                islemTipi: 'Hakediş',
-                                tutar: hakedisNum,
-                                bakiyeSonrasi: personel.bakiye,
-                                aciklama: `${islemTarihiMetni} Puantajı: ${aciklamaDetay}`
-                            });
-                        }
+                        islenenPersoneller[personel._id].toplamHakedis += gunlukHakedis;
+                        islenenPersoneller[personel._id].toplamGun += gunKatsayi;
 
-                        basariliTahakkuklar.push({
-                            isim: personel.adSoyad,
-                            tahakkukTutar: hakedisNum,
-                            yeniBakiye: personel.bakiye
-                        });
+                        if (satir.Tarih) islenenPersoneller[personel._id].tarihler.push(satir.Tarih);
                     } else {
-                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Uygun saat bulunamadı veya işçinin maaşı 0 TL." });
+                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Çalışma saati yetersiz veya işçinin maaşı 0 TL." });
                     }
                 } else {
                     if (!bulunamayanlarMap[aranacakIsim]) bulunamayanlarMap[aranacakIsim] = { isim: aranacakIsim, basimSayisi: 0 };
@@ -187,8 +180,55 @@ const puantajYukle = (req, res) => {
                 }
             }
 
+            // 🚀 ŞİMDİ SEPETTEKİLERİ TEK SATIR HALİNDE DEFTERE YAZIYORUZ
+            for (const pId in islenenPersoneller) {
+                const data = islenenPersoneller[pId];
+                const p = data.personel;
+                const hakedisNum = Math.round(Number(data.toplamHakedis) || 0);
+
+                p.bakiye = (p.bakiye || 0) + hakedisNum;
+                await p.save();
+
+                // Tarih Aralığı Hesaplama (Örn: 01.05 - 05.05)
+                let islemTarihiMetni = new Date().toLocaleDateString('tr-TR');
+                if (data.tarihler.length > 0) {
+                    const parseDate = (val) => {
+                        if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000).toLocaleDateString('tr-TR');
+                        return val.toString();
+                    };
+
+                    let ilkTarih = parseDate(data.tarihler[0]);
+                    let sonTarih = parseDate(data.tarihler[data.tarihler.length - 1]);
+
+                    if (ilkTarih !== sonTarih) {
+                        islemTarihiMetni = `${ilkTarih} - ${sonTarih}`;
+                    } else {
+                        islemTarihiMetni = ilkTarih;
+                    }
+                }
+
+                const netGun = Number(data.toplamGun.toFixed(2)); // Örn 5.00 ise 5 yazar. 4.85 ise 4.85 yazar.
+
+                if (PersonelHareket) {
+                    await PersonelHareket.create({
+                        personelId: p._id,
+                        islemTipi: 'Hakediş',
+                        tutar: hakedisNum,
+                        bakiyeSonrasi: p.bakiye,
+                        aciklama: `${islemTarihiMetni} Tarihleri Arası: Toplam ${netGun} Günlük Çalışma Tahakkuku`
+                    });
+                }
+
+                basariliTahakkuklar.push({
+                    isim: p.adSoyad,
+                    tahakkukTutar: hakedisNum,
+                    gun: netGun.toString(),
+                    yeniBakiye: p.bakiye
+                });
+            }
+
             res.status(200).json({
-                mesaj: "Puantaj işlemi tamamlandı ve tahakkuklar ekstreye işlendi.",
+                mesaj: "Toplu puantaj işlemi tamamlandı ve tek satır halinde ekstreye yansıdı.",
                 ozet: { basariliTahakkuklar, sistemdeBulunamayanlar: Object.values(bulunamayanlarMap), eksikBasimlar }
             });
 
