@@ -2,18 +2,13 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
 
-// 🚀 ÇÖZÜM 1: Personel modelini zorla çağır
 let Personel;
 try { Personel = mongoose.model('Personel'); }
 catch (e) { console.warn("Personel modeli bulunamadı!"); }
 
-// 🚀🚀 BÜYÜK ÇÖZÜM: SİNSİ HATANIN KATİLİ!
-// Sistem defteri (PersonelHareket) bulamazsa diye şemayı buraya ZORLA gömdük. 
-// Artık "if(PersonelHareket)" diye sormayacak, ÇAT diye yazacak!
 let PersonelHareket;
-try {
-    PersonelHareket = mongoose.model('PersonelHareket');
-} catch (error) {
+try { PersonelHareket = mongoose.model('PersonelHareket'); }
+catch (error) {
     const yedekHareketSemasi = new mongoose.Schema({
         personelId: { type: mongoose.Schema.Types.ObjectId, ref: 'Personel', required: true },
         islemTarihi: { type: Date, default: Date.now },
@@ -44,6 +39,17 @@ const timeToMinutes = (timeVal) => {
     return 0;
 };
 
+// 🚀 ÇELİK YELEK: Türkçe Karakter ve Boşluk Temizleyici
+// Ne yazarsan yaz (Örn: "Adı Soyadı"), bu fonksiyon onu tertemiz "adisoyadi" yapar!
+const metinTemizle = (metin) => {
+    if (!metin) return '';
+    return metin.toString().toLowerCase()
+        .replace(/ı/g, 'i').replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u').replace(/ş/g, 's')
+        .replace(/ö/g, 'o').replace(/ç/g, 'c')
+        .replace(/[^a-z0-9]/g, '');
+};
+
 const puantajYukle = (req, res) => {
     upload(req, res, async (err) => {
         if (err) return res.status(500).json({ mesaj: "Dosya yükleme hatası" });
@@ -61,7 +67,13 @@ const puantajYukle = (req, res) => {
             const molaSure = molaBitDakika - molaBasDakika;
 
             const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-            const excelVerisiRaw = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+            const sheetName = workbook.SheetNames[0];
+            const excelVerisiRaw = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+            // Eğer dosya tamamen boşsa kullanıcıyı uyar
+            if (!excelVerisiRaw || excelVerisiRaw.length === 0) {
+                return res.status(400).json({ mesaj: "Excel dosyasının içi boş veya sadece başlıklar var!" });
+            }
 
             let basariliTahakkuklar = [];
             let eksikBasimlar = [];
@@ -70,13 +82,17 @@ const puantajYukle = (req, res) => {
             for (let rawSatir of excelVerisiRaw) {
                 let satir = { AdSoyad: null, GirisSaati: null, CikisSaati: null, Tarih: null, Gun: null, Tutar: null };
 
+                // Ultra esnek sütun okuyucu (Türkçe dahil tüm varyasyonları yakalar)
                 for (let key in rawSatir) {
-                    let temizKey = key.replace(/\s+/g, '').toLowerCase();
-                    if (['adsoyad', 'adisoyadi', 'personel', 'ad', 'isim'].includes(temizKey)) satir.AdSoyad = rawSatir[key];
-                    else if (temizKey.includes('giris') || temizKey.includes('giriş')) satir.GirisSaati = rawSatir[key];
-                    else if (temizKey.includes('cikis') || temizKey.includes('çıkış')) satir.CikisSaati = rawSatir[key];
+                    if (rawSatir[key] === null) continue;
+
+                    let temizKey = metinTemizle(key);
+
+                    if (temizKey.includes('ad') || temizKey.includes('isim') || temizKey.includes('personel')) satir.AdSoyad = rawSatir[key];
+                    else if (temizKey.includes('giris')) satir.GirisSaati = rawSatir[key];
+                    else if (temizKey.includes('cikis')) satir.CikisSaati = rawSatir[key];
                     else if (temizKey.includes('tarih') || temizKey.includes('date')) satir.Tarih = rawSatir[key];
-                    else if (temizKey.includes('gün') || temizKey.includes('gun')) satir.Gun = rawSatir[key];
+                    else if (temizKey.includes('gun') || temizKey.includes('mesai')) satir.Gun = rawSatir[key];
                     else if (temizKey.includes('tutar') || temizKey.includes('hakedis') || temizKey.includes('alacak')) satir.Tutar = rawSatir[key];
                 }
 
@@ -131,11 +147,9 @@ const puantajYukle = (req, res) => {
                         }
                     }
 
-                    // EĞER HAKEDİŞ BULUNDUYSA VE ÜCRETİ 0'DAN BÜYÜKSE İŞLE
                     if (islemGecerli && gunlukHakedis > 0) {
                         const hakedisNum = Math.round(Number(gunlukHakedis) || 0);
 
-                        // 1. ŞİRKET İŞÇİYE BORÇLANIYOR (BAKİYE ARTAR)
                         personel.bakiye = (personel.bakiye || 0) + hakedisNum;
                         await personel.save();
 
@@ -149,14 +163,15 @@ const puantajYukle = (req, res) => {
                             }
                         }
 
-                        // 2. O YEŞİL "TL ALACAK (HAKEDİŞ)" SATIRI KESİN OLARAK DEFTERE İNİYOR!
-                        await PersonelHareket.create({
-                            personelId: personel._id,
-                            islemTipi: 'Hakediş',
-                            tutar: hakedisNum,
-                            bakiyeSonrasi: personel.bakiye,
-                            aciklama: `${islemTarihiMetni} Puantajı: ${aciklamaDetay}`
-                        });
+                        if (PersonelHareket) {
+                            await PersonelHareket.create({
+                                personelId: personel._id,
+                                islemTipi: 'Hakediş',
+                                tutar: hakedisNum,
+                                bakiyeSonrasi: personel.bakiye,
+                                aciklama: `${islemTarihiMetni} Puantajı: ${aciklamaDetay}`
+                            });
+                        }
 
                         basariliTahakkuklar.push({
                             isim: personel.adSoyad,
@@ -164,7 +179,7 @@ const puantajYukle = (req, res) => {
                             yeniBakiye: personel.bakiye
                         });
                     } else {
-                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Uygun saat yok veya personelin yevmiyesi (ücreti) 0 TL girilmiş." });
+                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Uygun saat bulunamadı veya işçinin maaşı 0 TL." });
                     }
                 } else {
                     if (!bulunamayanlarMap[aranacakIsim]) bulunamayanlarMap[aranacakIsim] = { isim: aranacakIsim, basimSayisi: 0 };
