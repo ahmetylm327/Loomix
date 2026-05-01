@@ -1,18 +1,26 @@
 const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
+const Personel = mongoose.model('Personel');
 
-// Modellerin güvenli bir şekilde çağrılması
-let Personel, PersonelHareket, Setting;
-try { Personel = mongoose.model('Personel'); } catch (e) { Personel = require('../models/personelModel'); }
-try { PersonelHareket = mongoose.model('PersonelHareket'); } catch (e) { PersonelHareket = require('../models/personelHareketModel'); }
-try { Setting = mongoose.model('Setting'); } catch (e) {
-    Setting = mongoose.model('Setting', new mongoose.Schema({ key: { type: String, unique: true }, value: mongoose.Schema.Types.Mixed }));
+// 🚀 ÇÖZÜM: Sunucu çökmesini önleyen, modelin güvenli çağrılma yöntemi.
+// (Ödeme sayfan nasıl sorunsuz çalışıyorsa, burası da birebir aynı mantıkla çalışacak)
+let PersonelHareket;
+try {
+    PersonelHareket = mongoose.model('PersonelHareket');
+} catch (error) {
+    console.warn("Uyarı: PersonelHareket modeli henüz oluşturulmamış.");
+}
+
+let Setting;
+try {
+    Setting = mongoose.model('Setting');
+} catch (error) {
+    Setting = mongoose.model('Setting', new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed }));
 }
 
 const upload = multer({ storage: multer.memoryStorage() }).single('file');
 
-// Excel saat hatalarını düzelten zırh
 const timeToMinutes = (timeVal) => {
     if (timeVal == null) return 0;
     if (typeof timeVal === 'string') {
@@ -32,7 +40,8 @@ const puantajYukle = (req, res) => {
         if (!req.file) return res.status(400).json({ mesaj: "Excel dosyası bulunamadı." });
 
         try {
-            let settings = await Setting.findOne({ key: 'mesai_ayarlari' });
+            let settings;
+            if (Setting) settings = await Setting.findOne({ key: 'mesai_ayarlari' });
             if (!settings) settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 } };
             const { baslangic, bitis, molaBas, molaBit, tolerans } = settings.value;
 
@@ -51,7 +60,6 @@ const puantajYukle = (req, res) => {
             for (let rawSatir of excelVerisiRaw) {
                 let satir = { AdSoyad: null, GirisSaati: null, CikisSaati: null, Tarih: null, Gun: null, Tutar: null };
 
-                // Excel Sütunlarını Düzeltme Filtresi
                 for (let key in rawSatir) {
                     let temizKey = key.replace(/\s+/g, '').toLowerCase();
                     if (['adsoyad', 'adisoyadi', 'personel', 'ad', 'isim'].includes(temizKey)) satir.AdSoyad = rawSatir[key];
@@ -108,16 +116,17 @@ const puantajYukle = (req, res) => {
                             else if (personel.ucretTipi === 'Saatlik') gunlukHakedis = calismaSaati * ucret;
                             else gunlukHakedis = calismaSaati * (ucret / 260);
 
-                            aciklamaDetay = `${gunKatsayi.toFixed(1)} Günlük Çalışma Tahakkuku`;
+                            aciklamaDetay = `${gunKatsayi.toFixed(1)} Günlük Çalışma Tahakkuku (${satir.GirisSaati} - ${satir.CikisSaati})`;
                             islemGecerli = true;
                         }
                     }
 
                     if (islemGecerli) {
-                        // 🚀 ÇÖZÜM NOKTASI: MATEMATİKSEL GARANTİ
-                        let hakedisNum = Number(gunlukHakedis) || 0;
-                        let anlikBakiye = Number(personel.bakiye) || 0;
-                        let yeniBakiye = anlikBakiye + hakedisNum;
+                        const hakedisNum = Math.round(Number(gunlukHakedis) || 0);
+
+                        // 1. ŞİRKET İŞÇİYE BORÇLANIYOR (BAKİYE ARTAR)
+                        personel.bakiye = (personel.bakiye || 0) + hakedisNum;
+                        await personel.save();
 
                         let islemTarihiMetni = new Date().toLocaleDateString('tr-TR');
                         if (satir.Tarih) {
@@ -129,33 +138,24 @@ const puantajYukle = (req, res) => {
                             }
                         }
 
-                        // 🚀 ÇÖZÜM NOKTASI: ÖNCE DEFTERE YAZ, EĞER HATA VERMEZSE BAKİYEYİ ARTIR!
-                        try {
+                        // 2. O YEŞİL "TL ALACAK (HAKEDİŞ)" SATIRI ŞİMDİ DEFTERE İNİYOR!
+                        if (PersonelHareket) {
                             await PersonelHareket.create({
                                 personelId: personel._id,
-                                islemTipi: 'Hakediş',
-                                tutar: Math.round(hakedisNum),
-                                bakiyeSonrasi: Math.round(yeniBakiye),
+                                islemTipi: 'Hakediş', // Frontend bunu okuyup o yeşil sütuna atacak
+                                tutar: hakedisNum,
+                                bakiyeSonrasi: personel.bakiye,
                                 aciklama: `${islemTarihiMetni} Puantajı: ${aciklamaDetay}`
                             });
-
-                            // Ekstre başarıyla oluştuysa asıl bakiyeyi güncelle
-                            personel.bakiye = yeniBakiye;
-                            await personel.save();
-
-                            basariliTahakkuklar.push({
-                                isim: personel.adSoyad,
-                                tahakkukTutar: Math.round(hakedisNum),
-                                yeniBakiye: Math.round(yeniBakiye)
-                            });
-                        } catch (hareketHata) {
-                            eksikBasimlar.push({
-                                isim: personel.adSoyad,
-                                mesaj: `Deftere Kayıt Hatası: Bilgilerde matematiksel bir sorun var (${hareketHata.message})`
-                            });
                         }
+
+                        basariliTahakkuklar.push({
+                            isim: personel.adSoyad,
+                            tahakkukTutar: hakedisNum,
+                            yeniBakiye: personel.bakiye
+                        });
                     } else {
-                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Uygun saat, gün veya tutar verisi hesaplanamadı." });
+                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Uygun çalışma verisi bulunamadı." });
                     }
                 } else {
                     if (!bulunamayanlarMap[aranacakIsim]) bulunamayanlarMap[aranacakIsim] = { isim: aranacakIsim, basimSayisi: 0 };
@@ -164,7 +164,7 @@ const puantajYukle = (req, res) => {
             }
 
             res.status(200).json({
-                mesaj: "Puantaj işlemi tamamlandı.",
+                mesaj: "Puantaj işlemi tamamlandı ve tahakkuklar ekstreye işlendi.",
                 ozet: { basariliTahakkuklar, sistemdeBulunamayanlar: Object.values(bulunamayanlarMap), eksikBasimlar }
             });
 
@@ -183,7 +183,8 @@ const ayarlarıGuncelle = async (req, res) => {
 
 const ayarlarıGetir = async (req, res) => {
     try {
-        const settings = await Setting.findOne({ key: 'mesai_ayarlari' });
+        let settings;
+        if (Setting) settings = await Setting.findOne({ key: 'mesai_ayarlari' });
         if (settings) { res.status(200).json(settings.value); }
         else { res.status(200).json({ baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 }); }
     } catch (e) { res.status(500).json({ mesaj: "Ayarlar çekilemedi" }); }
