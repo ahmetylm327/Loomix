@@ -1,23 +1,33 @@
 const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
-const Personel = mongoose.model('Personel');
 
-// 🚀 ÇÖZÜM: Sunucu çökmesini önleyen, modelin güvenli çağrılma yöntemi.
-// (Ödeme sayfan nasıl sorunsuz çalışıyorsa, burası da birebir aynı mantıkla çalışacak)
+// 🚀 ÇÖZÜM 1: Personel modelini zorla çağır
+let Personel;
+try { Personel = mongoose.model('Personel'); }
+catch (e) { console.warn("Personel modeli bulunamadı!"); }
+
+// 🚀🚀 BÜYÜK ÇÖZÜM: SİNSİ HATANIN KATİLİ!
+// Sistem defteri (PersonelHareket) bulamazsa diye şemayı buraya ZORLA gömdük. 
+// Artık "if(PersonelHareket)" diye sormayacak, ÇAT diye yazacak!
 let PersonelHareket;
 try {
     PersonelHareket = mongoose.model('PersonelHareket');
 } catch (error) {
-    console.warn("Uyarı: PersonelHareket modeli henüz oluşturulmamış.");
+    const yedekHareketSemasi = new mongoose.Schema({
+        personelId: { type: mongoose.Schema.Types.ObjectId, ref: 'Personel', required: true },
+        islemTarihi: { type: Date, default: Date.now },
+        islemTipi: { type: String, enum: ['Hakediş', 'Ödeme', 'Avans', 'Prim', 'Avans İadesi'], required: true },
+        aciklama: { type: String },
+        tutar: { type: Number, required: true },
+        bakiyeSonrasi: { type: Number }
+    });
+    PersonelHareket = mongoose.model('PersonelHareket', yedekHareketSemasi, 'personelhareketleri');
 }
 
 let Setting;
-try {
-    Setting = mongoose.model('Setting');
-} catch (error) {
-    Setting = mongoose.model('Setting', new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed }));
-}
+try { Setting = mongoose.model('Setting'); }
+catch (error) { Setting = mongoose.model('Setting', new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed })); }
 
 const upload = multer({ storage: multer.memoryStorage() }).single('file');
 
@@ -121,7 +131,8 @@ const puantajYukle = (req, res) => {
                         }
                     }
 
-                    if (islemGecerli) {
+                    // EĞER HAKEDİŞ BULUNDUYSA VE ÜCRETİ 0'DAN BÜYÜKSE İŞLE
+                    if (islemGecerli && gunlukHakedis > 0) {
                         const hakedisNum = Math.round(Number(gunlukHakedis) || 0);
 
                         // 1. ŞİRKET İŞÇİYE BORÇLANIYOR (BAKİYE ARTAR)
@@ -138,16 +149,14 @@ const puantajYukle = (req, res) => {
                             }
                         }
 
-                        // 2. O YEŞİL "TL ALACAK (HAKEDİŞ)" SATIRI ŞİMDİ DEFTERE İNİYOR!
-                        if (PersonelHareket) {
-                            await PersonelHareket.create({
-                                personelId: personel._id,
-                                islemTipi: 'Hakediş', // Frontend bunu okuyup o yeşil sütuna atacak
-                                tutar: hakedisNum,
-                                bakiyeSonrasi: personel.bakiye,
-                                aciklama: `${islemTarihiMetni} Puantajı: ${aciklamaDetay}`
-                            });
-                        }
+                        // 2. O YEŞİL "TL ALACAK (HAKEDİŞ)" SATIRI KESİN OLARAK DEFTERE İNİYOR!
+                        await PersonelHareket.create({
+                            personelId: personel._id,
+                            islemTipi: 'Hakediş',
+                            tutar: hakedisNum,
+                            bakiyeSonrasi: personel.bakiye,
+                            aciklama: `${islemTarihiMetni} Puantajı: ${aciklamaDetay}`
+                        });
 
                         basariliTahakkuklar.push({
                             isim: personel.adSoyad,
@@ -155,7 +164,7 @@ const puantajYukle = (req, res) => {
                             yeniBakiye: personel.bakiye
                         });
                     } else {
-                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Uygun çalışma verisi bulunamadı." });
+                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Uygun saat yok veya personelin yevmiyesi (ücreti) 0 TL girilmiş." });
                     }
                 } else {
                     if (!bulunamayanlarMap[aranacakIsim]) bulunamayanlarMap[aranacakIsim] = { isim: aranacakIsim, basimSayisi: 0 };
