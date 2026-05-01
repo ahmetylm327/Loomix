@@ -89,16 +89,17 @@ const PuantajYukle = () => {
             )
         },
         {
-            title: 'Tahakkuk',
+            title: 'Hakediş & Tahakkuk',
             key: 'tahakkuk',
             render: (_, record) => (
                 <div>
-                    <Tag color="blue" style={{ fontSize: '10px' }}>{record.gun} Gün</Tag>
-                    <b style={{ color: '#52c41a', fontSize: '13px' }}>+ {record.tahakkukTutar} ₺</b>
+                    {/* Rapor ekranında gün sayısını çok daha net gösteriyoruz */}
+                    <Tag color="blue" style={{ fontSize: '11px' }}>Toplam {record.gun} Günlük</Tag>
+                    <b style={{ color: '#52c41a', fontSize: '14px', marginLeft: '5px' }}>+ {record.tahakkukTutar} ₺</b>
                 </div>
             )
         },
-        { title: 'Yeni Bakiye', dataIndex: 'yeniBakiye', align: 'right', render: b => <b>{b} ₺</b> },
+        { title: 'Yeni Bakiye', dataIndex: 'yeniBakiye', align: 'right', render: b => <b style={{ fontSize: '14px' }}>{b} ₺</b> },
     ];
 
     const bulunamayanSutunlar = [
@@ -117,8 +118,10 @@ const PuantajYukle = () => {
         { title: 'Aksiyon', align: 'right', render: () => <Tag color="warning">Sisteme Ekleyin</Tag> }
     ];
 
+    // 🚀 YENİ: Eksik Basım tablosuna "Hatalı Tarih" sütunu eklendi!
     const eksikBasimSutunlar = [
         { title: 'Personel', dataIndex: 'isim', render: val => <b>{val}</b> },
+        { title: 'Hatalı Tarih', dataIndex: 'tarih', render: val => <Tag color="blue">{val || '-'}</Tag> },
         {
             title: 'Giriş / Çıkış', key: 'saatler', render: (_, r) => (
                 <div>

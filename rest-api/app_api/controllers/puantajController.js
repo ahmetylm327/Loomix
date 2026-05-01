@@ -48,6 +48,17 @@ const metinTemizle = (metin) => {
         .replace(/[^a-z0-9]/g, '');
 };
 
+// 🚀 YENİ: Excel tarihlerini her koşulda kusursuz Türkçe tarihe çevirir
+const excelTarihCevir = (val) => {
+    if (!val) return new Date().toLocaleDateString('tr-TR');
+    if (typeof val === 'number') {
+        const date = new Date((val - 25569) * 86400 * 1000);
+        return date.toLocaleDateString('tr-TR');
+    }
+    // Eğer direkt string geldiyse (örn: "02.05.2026") dokunma
+    return val.toString();
+};
+
 const puantajYukle = (req, res) => {
     upload(req, res, async (err) => {
         if (err) return res.status(500).json({ mesaj: "Dosya yükleme hatası" });
@@ -77,8 +88,6 @@ const puantajYukle = (req, res) => {
             let basariliTahakkuklar = [];
             let eksikBasimlar = [];
             let bulunamayanlarMap = {};
-
-            // 🚀 BÜYÜK YENİLİK: İşçileri gruplamak için sepet oluşturduk
             let islenenPersoneller = {};
 
             for (let rawSatir of excelVerisiRaw) {
@@ -86,7 +95,6 @@ const puantajYukle = (req, res) => {
 
                 for (let key in rawSatir) {
                     if (rawSatir[key] === null) continue;
-
                     let temizKey = metinTemizle(key);
 
                     if (temizKey.includes('ad') || temizKey.includes('isim') || temizKey.includes('personel')) satir.AdSoyad = rawSatir[key];
@@ -100,6 +108,8 @@ const puantajYukle = (req, res) => {
                 if (!satir.AdSoyad) continue;
 
                 const aranacakIsim = satir.AdSoyad.toString().trim();
+                const satirTarihi = excelTarihCevir(satir.Tarih); // 🚀 Tarihi yakaladık!
+
                 const personel = await Personel.findOne({
                     adSoyad: { $regex: new RegExp('^' + aranacakIsim + '$', 'i') },
                     aktifMi: true
@@ -156,7 +166,6 @@ const puantajYukle = (req, res) => {
                         }
                     }
 
-                    // 🚀 EĞER SATIR GEÇERLİYSE, DEFTRE YAZMA. ÖNCE SEPETE EKLE! (GRUPLAMA)
                     if (islemGecerli && gunlukHakedis > 0) {
                         if (!islenenPersoneller[personel._id]) {
                             islenenPersoneller[personel._id] = {
@@ -169,10 +178,17 @@ const puantajYukle = (req, res) => {
 
                         islenenPersoneller[personel._id].toplamHakedis += gunlukHakedis;
                         islenenPersoneller[personel._id].toplamGun += gunKatsayi;
+                        islenenPersoneller[personel._id].tarihler.push(satirTarihi);
 
-                        if (satir.Tarih) islenenPersoneller[personel._id].tarihler.push(satir.Tarih);
                     } else {
-                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Çalışma saati yetersiz veya işçinin maaşı 0 TL." });
+                        // 🚀 YENİ: Hata durumunda hangi gün olduğunu frontend'e yolluyoruz!
+                        eksikBasimlar.push({
+                            isim: aranacakIsim,
+                            tarih: satirTarihi, // Eklendi!
+                            giris: satir.GirisSaati || '-', // Eklendi!
+                            cikis: satir.CikisSaati || '-', // Eklendi!
+                            mesaj: "Saat yetersiz, basım eksik veya maaş 0 TL."
+                        });
                     }
                 } else {
                     if (!bulunamayanlarMap[aranacakIsim]) bulunamayanlarMap[aranacakIsim] = { isim: aranacakIsim, basimSayisi: 0 };
@@ -180,7 +196,6 @@ const puantajYukle = (req, res) => {
                 }
             }
 
-            // 🚀 ŞİMDİ SEPETTEKİLERİ TEK SATIR HALİNDE DEFTERE YAZIYORUZ
             for (const pId in islenenPersoneller) {
                 const data = islenenPersoneller[pId];
                 const p = data.personel;
@@ -189,25 +204,17 @@ const puantajYukle = (req, res) => {
                 p.bakiye = (p.bakiye || 0) + hakedisNum;
                 await p.save();
 
-                // Tarih Aralığı Hesaplama (Örn: 01.05 - 05.05)
-                let islemTarihiMetni = new Date().toLocaleDateString('tr-TR');
-                if (data.tarihler.length > 0) {
-                    const parseDate = (val) => {
-                        if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000).toLocaleDateString('tr-TR');
-                        return val.toString();
-                    };
-
-                    let ilkTarih = parseDate(data.tarihler[0]);
-                    let sonTarih = parseDate(data.tarihler[data.tarihler.length - 1]);
-
+                // 🚀 YENİ: Tarih aralığını şık bir metne çevirme (Örn: 01.05.2026 ile 05.05.2026)
+                let islemTarihiMetni = data.tarihler[0];
+                if (data.tarihler.length > 1) {
+                    let ilkTarih = data.tarihler[0];
+                    let sonTarih = data.tarihler[data.tarihler.length - 1];
                     if (ilkTarih !== sonTarih) {
-                        islemTarihiMetni = `${ilkTarih} - ${sonTarih}`;
-                    } else {
-                        islemTarihiMetni = ilkTarih;
+                        islemTarihiMetni = `${ilkTarih} ile ${sonTarih}`; // Daha güzel bir okunuş
                     }
                 }
 
-                const netGun = Number(data.toplamGun.toFixed(2)); // Örn 5.00 ise 5 yazar. 4.85 ise 4.85 yazar.
+                const netGun = Number(data.toplamGun.toFixed(2));
 
                 if (PersonelHareket) {
                     await PersonelHareket.create({
@@ -215,7 +222,7 @@ const puantajYukle = (req, res) => {
                         islemTipi: 'Hakediş',
                         tutar: hakedisNum,
                         bakiyeSonrasi: p.bakiye,
-                        aciklama: `${islemTarihiMetni} Tarihleri Arası: Toplam ${netGun} Günlük Çalışma Tahakkuku`
+                        aciklama: `${islemTarihiMetni} Tarihleri Arası: Toplam ${netGun} Günlük Çalışma`
                     });
                 }
 
