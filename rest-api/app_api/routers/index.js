@@ -34,14 +34,14 @@ router.post('/employees/:employeeId/refund', ctrlPersonel.personelTahsilatYap);
 // ---------------------------------------------------------
 // 🕒 MESAİ VE PUANTAJ ROTALARI
 // ---------------------------------------------------------
-router.post('/attendance/upload', upload.single('file'), ctrlMesai.mesaiYukle);
+router.post('/attendance/upload', ctrlPuantaj.puantajYukle);
+router.post('/puantaj/yukle', ctrlPuantaj.puantajYukle); // Bu da yedek köprü olarak kalsın
+
 router.post('/payroll/:employeeId/calculate', ctrlMesai.hakedisHesapla);
-router.post('/puantaj/yukle', ctrlPuantaj.puantajYukle);
 
 // 🚀 YENİ EKLENEN: Dinamik Mesai Ayarları Rotaları
 router.get('/attendance/settings', ctrlPuantaj.ayarlarıGetir);
 router.post('/attendance/settings', ctrlPuantaj.ayarlarıGuncelle);
-
 // ---------------------------------------------------------
 // ⚙️ ÜRETİM ROTALARI
 // ---------------------------------------------------------
