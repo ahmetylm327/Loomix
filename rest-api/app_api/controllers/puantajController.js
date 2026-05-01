@@ -41,6 +41,7 @@ const puantajYukle = (req, res) => {
             let bulunamayanlarMap = {};
 
             for (let satir of excelVerisi) {
+                // Excel'deki başlıkların tam olarak 'AdSoyad', 'GirisSaati', 'CikisSaati', 'Tarih' olduğundan emin olmalısın!
                 const personel = await Personel.findOne({ adSoyad: satir.AdSoyad, aktifMi: true });
 
                 if (personel) {
@@ -76,29 +77,32 @@ const puantajYukle = (req, res) => {
                         }
 
                         const calismaSaati = toplamDakika / 60;
-                        const gunlukKatsayi = calismaSaati / 10; // Kaç günlük mesai yaptı? (Örn: 1.0 veya 0.8)
+                        const gunlukKatsayi = calismaSaati / 10;
                         let gunlukHakedis = 0;
 
                         if (personel.ucretTipi === 'Günlük') {
                             gunlukHakedis = gunlukKatsayi * personel.ucretMiktari;
-                        } else {
+                        } else if (personel.ucretTipi === 'Saatlik') {
                             gunlukHakedis = calismaSaati * personel.ucretMiktari;
+                        } else {
+                            // Aylık veya parça başı için şimdilik saatlikmiş gibi kaba bir hesap yapıyoruz
+                            gunlukHakedis = calismaSaati * (personel.ucretMiktari / 260); // 26 gün * 10 saat = 260 saat
                         }
 
-                        // 1. Personel bakiyesini güncelle
-                        personel.bakiye = (personel.bakiye || 0) + gunlukHakedis;
+                        // 1. Personel bakiyesini güncelle (Sıfırın altına düşmesini de hesaba katarak)
+                        personel.bakiye = Number((personel.bakiye || 0)) + Number(gunlukHakedis);
                         await personel.save();
 
                         // 🚀 2. MÜŞTERİNİN İSTEDİĞİ RESMİ TAHAKKUK AÇIKLAMASI
-                        // Excel'de "Tarih" sütunu varsa onu alır, yoksa bugünün tarihini atar.
-                        const islemTarihiMetni = satir.Tarih || new Date().toLocaleDateString('tr-TR');
+                        const islemTarihiMetni = satir.Tarih ? dayjs(satir.Tarih).format('DD.MM.YYYY') : new Date().toLocaleDateString('tr-TR');
                         const resmiAciklama = `${islemTarihiMetni} Puantajı: ${gunlukKatsayi.toFixed(1)} Günlük Çalışma Tahakkuku (${satir.GirisSaati} - ${satir.CikisSaati})`;
 
+                        // 🚀 3. HAREKETİ DEFTRE İŞLE (bakiyeSonrasi tam olarak o anki güncel bakiyedir)
                         await PersonelHareket.create({
                             personelId: personel._id,
                             islemTipi: 'Hakediş',
-                            tutar: Math.round(gunlukHakedis),
-                            bakiyeSonrasi: Math.round(personel.bakiye),
+                            tutar: Number(Math.round(gunlukHakedis)),
+                            bakiyeSonrasi: Number(Math.round(personel.bakiye)),
                             aciklama: resmiAciklama
                         });
 
