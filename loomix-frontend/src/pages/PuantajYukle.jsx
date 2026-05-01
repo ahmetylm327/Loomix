@@ -48,14 +48,21 @@ const PuantajYukle = () => {
         formData.append('file', file);
 
         try {
+            // 🚀 ÇÖZÜM: CORS DUVARINI DELEN AYAR BURADA (withCredentials: true ve Accept Eklendi)
             const response = await axiosInstance.post('/attendance/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    'Accept': 'application/json'
+                },
+                withCredentials: true // Tarayıcıya "Bu yetkili bir istek" der ve CORS'u aşar
             });
             message.success(`${file.name} başarıyla işlendi!`);
             setRapor(response.data.ozet);
             onSuccess("Ok");
         } catch (error) {
-            message.error(error.response?.data?.mesaj || "Dosya yüklenirken hata oluştu!");
+            // Hata mesajını daha açıklayıcı yakalıyoruz
+            const errMsj = error.response?.data?.mesaj || error.message || "Dosya yüklenirken hata oluştu!";
+            message.error(errMsj);
             onError("Hata");
         } finally {
             setLoading(false);
@@ -94,7 +101,6 @@ const PuantajYukle = () => {
         { title: 'Yeni Bakiye', dataIndex: 'yeniBakiye', align: 'right', render: b => <b>{b} ₺</b> },
     ];
 
-    // 🚀 GÜNCEL: Sayılı Kayıtsız Personel Sütunları
     const bulunamayanSutunlar = [
         {
             title: 'Cihazdaki İsim & Kayıt Bilgisi',
@@ -103,7 +109,6 @@ const PuantajYukle = () => {
                 <div>
                     <Text type="danger"><b>{record.isim}</b></Text><br />
                     <span style={{ fontSize: '11px', color: '#8c8c8c' }}>
-                        {/* İŞTE SİHİRLİ DOKUNUŞ: basimSayisi yoksa gun'ü al */}
                         Cihazda <b style={{ color: '#000' }}>{record.basimSayisi || record.gun}</b> kez basım kaydı tespit edildi.
                     </span>
                 </div>
@@ -112,7 +117,6 @@ const PuantajYukle = () => {
         { title: 'Aksiyon', align: 'right', render: () => <Tag color="warning">Sisteme Ekleyin</Tag> }
     ];
 
-    // 🚀 Detaylı Hata Gösterimli Eksik Basım Sütunları
     const eksikBasimSutunlar = [
         { title: 'Personel', dataIndex: 'isim', render: val => <b>{val}</b> },
         {
@@ -183,7 +187,6 @@ const PuantajYukle = () => {
                         </Col>
                     </Row>
 
-                    {/* 🚀 SAYFALAMA AKTİF */}
                     {(rapor.eksikBasimlar?.length || 0) > 0 && (
                         <Card title={<><QuestionCircleOutlined style={{ color: '#cf1322' }} /> Eksik Kart Basanlar</>} style={{ marginBottom: 20, border: '1px solid #ffa39e' }} styles={{ body: { padding: 0 } }}>
                             <Alert message="Bu personeller giriş veya çıkışta kart basmayı unuttuğu için bugünkü maaşları YATIRILMADI. Personel listesinden manuel düzeltme yapınız." type="error" banner />
