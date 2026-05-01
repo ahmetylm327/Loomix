@@ -34,29 +34,38 @@ const puantajYukle = (req, res) => {
             const molaSure = molaBitDakika - molaBasDakika;
 
             const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-            const excelVerisi = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+            const excelVerisiRaw = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
 
             let basariliTahakkuklar = [];
             let eksikBasimlar = [];
             let bulunamayanlarMap = {};
 
-            for (let satir of excelVerisi) {
-                // Excel'deki başlıkların tam olarak 'AdSoyad', 'GirisSaati', 'CikisSaati', 'Tarih' olduğundan emin olmalısın!
-                const personel = await Personel.findOne({ adSoyad: satir.AdSoyad, aktifMi: true });
+            for (let rawSatir of excelVerisiRaw) {
+                // 🚀 1. ÇELİK YELEK: EXCEL SÜTUN İSİMLERİNİ OTOMATİK DÜZELT (Boşluk/Büyük-Küçük harf affeder)
+                let satir = { AdSoyad: null, GirisSaati: null, CikisSaati: null, Tarih: null };
+
+                for (let key in rawSatir) {
+                    let temizKey = key.replace(/\s+/g, '').toLowerCase(); // Örn: "Giriş Saati" -> "girişsaati"
+
+                    if (temizKey === 'adsoyad' || temizKey === 'adisoyadi' || temizKey === 'personel') satir.AdSoyad = rawSatir[key];
+                    else if (temizKey === 'girissaati' || temizKey === 'giris' || temizKey.includes('giriş')) satir.GirisSaati = rawSatir[key];
+                    else if (temizKey === 'cikissaati' || temizKey === 'cikis' || temizKey.includes('çıkış')) satir.CikisSaati = rawSatir[key];
+                    else if (temizKey === 'tarih' || temizKey === 'date') satir.Tarih = rawSatir[key];
+                }
+
+                if (!satir.AdSoyad) continue; // Eğer satırda isim bile yoksa bomboş satırdır, atla.
+
+                // 🚀 2. ÇELİK YELEK: İSİM ARAMASINI GEVŞET (Ahmet Yılmaz === ahmet yılmaz )
+                const aranacakIsim = satir.AdSoyad.toString().trim();
+                const personel = await Personel.findOne({
+                    adSoyad: { $regex: new RegExp('^' + aranacakIsim + '$', 'i') },
+                    aktifMi: true
+                });
 
                 if (personel) {
                     if (!satir.GirisSaati || !satir.CikisSaati) {
-                        let hataNedeni = "";
-                        if (!satir.GirisSaati && !satir.CikisSaati) hataNedeni = "Hiç basmamış (Giriş/Çıkış Yok)";
-                        else if (!satir.GirisSaati) hataNedeni = "Girişte basmayı unutmuş";
-                        else if (!satir.CikisSaati) hataNedeni = "Çıkışta basmayı unutmuş";
-
-                        eksikBasimlar.push({
-                            isim: satir.AdSoyad,
-                            giris: satir.GirisSaati || '-',
-                            cikis: satir.CikisSaati || '-',
-                            mesaj: hataNedeni
-                        });
+                        let hataNedeni = (!satir.GirisSaati && !satir.CikisSaati) ? "Giriş/Çıkış Yok" : (!satir.GirisSaati ? "Giriş Yok" : "Çıkış Yok");
+                        eksikBasimlar.push({ isim: aranacakIsim, giris: satir.GirisSaati || '-', cikis: satir.CikisSaati || '-', mesaj: hataNedeni });
                         continue;
                     }
 
@@ -85,19 +94,17 @@ const puantajYukle = (req, res) => {
                         } else if (personel.ucretTipi === 'Saatlik') {
                             gunlukHakedis = calismaSaati * personel.ucretMiktari;
                         } else {
-                            // Aylık veya parça başı için şimdilik saatlikmiş gibi kaba bir hesap yapıyoruz
-                            gunlukHakedis = calismaSaati * (personel.ucretMiktari / 260); // 26 gün * 10 saat = 260 saat
+                            gunlukHakedis = calismaSaati * (personel.ucretMiktari / 260);
                         }
 
-                        // 1. Personel bakiyesini güncelle (Sıfırın altına düşmesini de hesaba katarak)
+                        // 1. Personel bakiyesini güncelle
                         personel.bakiye = Number((personel.bakiye || 0)) + Number(gunlukHakedis);
                         await personel.save();
 
-                        // 🚀 2. MÜŞTERİNİN İSTEDİĞİ RESMİ TAHAKKUK AÇIKLAMASI
-                        const islemTarihiMetni = satir.Tarih ? dayjs(satir.Tarih).format('DD.MM.YYYY') : new Date().toLocaleDateString('tr-TR');
+                        // 🚀 3. TAHAKKUK FİŞİNİ EKRANA (EKSTREYE) YANSIT
+                        const islemTarihiMetni = satir.Tarih || new Date().toLocaleDateString('tr-TR');
                         const resmiAciklama = `${islemTarihiMetni} Puantajı: ${gunlukKatsayi.toFixed(1)} Günlük Çalışma Tahakkuku (${satir.GirisSaati} - ${satir.CikisSaati})`;
 
-                        // 🚀 3. HAREKETİ DEFTRE İŞLE (bakiyeSonrasi tam olarak o anki güncel bakiyedir)
                         await PersonelHareket.create({
                             personelId: personel._id,
                             islemTipi: 'Hakediş',
@@ -110,15 +117,14 @@ const puantajYukle = (req, res) => {
                             isim: personel.adSoyad,
                             tahakkukTutar: Math.round(gunlukHakedis),
                             gun: gunlukKatsayi.toFixed(1),
-                            yeniBakiye: Math.round(personel.bakiye),
-                            toleransUygulandiMi: gecikmeSuresi > 0 && gecikmeSuresi <= tolerans
+                            yeniBakiye: Math.round(personel.bakiye)
                         });
                     }
                 } else {
-                    if (!bulunamayanlarMap[satir.AdSoyad]) {
-                        bulunamayanlarMap[satir.AdSoyad] = { isim: satir.AdSoyad, basimSayisi: 0 };
+                    if (!bulunamayanlarMap[aranacakIsim]) {
+                        bulunamayanlarMap[aranacakIsim] = { isim: aranacakIsim, basimSayisi: 0 };
                     }
-                    bulunamayanlarMap[satir.AdSoyad].basimSayisi += 1;
+                    bulunamayanlarMap[aranacakIsim].basimSayisi += 1;
                 }
             }
 
