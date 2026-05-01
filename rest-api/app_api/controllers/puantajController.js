@@ -1,16 +1,18 @@
 const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
-const Personel = mongoose.model('Personel');
-const PersonelHareket = mongoose.model('PersonelHareket');
-const Setting = mongoose.models.Setting || mongoose.model('Setting', new mongoose.Schema({
-    key: { type: String, unique: true },
-    value: mongoose.Schema.Types.Mixed
-}));
+
+// Modellerin güvenli bir şekilde çağrılması
+let Personel, PersonelHareket, Setting;
+try { Personel = mongoose.model('Personel'); } catch (e) { Personel = require('../models/personelModel'); }
+try { PersonelHareket = mongoose.model('PersonelHareket'); } catch (e) { PersonelHareket = require('../models/personelHareketModel'); }
+try { Setting = mongoose.model('Setting'); } catch (e) {
+    Setting = mongoose.model('Setting', new mongoose.Schema({ key: { type: String, unique: true }, value: mongoose.Schema.Types.Mixed }));
+}
 
 const upload = multer({ storage: multer.memoryStorage() }).single('file');
 
-// 🚀 ÇELİK YELEK 1: Excel'den gelen bozuk ondalık saat formatlarını düzeltir
+// Excel saat hatalarını düzelten zırh
 const timeToMinutes = (timeVal) => {
     if (timeVal == null) return 0;
     if (typeof timeVal === 'string') {
@@ -18,7 +20,6 @@ const timeToMinutes = (timeVal) => {
         if (parts.length < 2) return 0;
         return (Number(parts[0]) * 60) + Number(parts[1]);
     }
-    // Eğer Excel saatleri gizli ondalık sayıysa (örn: 0.3333 -> 08:00)
     if (typeof timeVal === 'number') {
         return Math.round(timeVal * 24 * 60);
     }
@@ -32,9 +33,7 @@ const puantajYukle = (req, res) => {
 
         try {
             let settings = await Setting.findOne({ key: 'mesai_ayarlari' });
-            if (!settings) {
-                settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 } };
-            }
+            if (!settings) settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 } };
             const { baslangic, bitis, molaBas, molaBit, tolerans } = settings.value;
 
             const mesaiBaslangicDakika = timeToMinutes(baslangic);
@@ -50,17 +49,17 @@ const puantajYukle = (req, res) => {
             let bulunamayanlarMap = {};
 
             for (let rawSatir of excelVerisiRaw) {
-                // 🚀 ÇELİK YELEK 2: Sütun isimleri farklı da olsa otomatik bulur
                 let satir = { AdSoyad: null, GirisSaati: null, CikisSaati: null, Tarih: null, Gun: null, Tutar: null };
 
+                // Excel Sütunlarını Düzeltme Filtresi
                 for (let key in rawSatir) {
                     let temizKey = key.replace(/\s+/g, '').toLowerCase();
-                    if (temizKey === 'adsoyad' || temizKey === 'adisoyadi' || temizKey === 'personel') satir.AdSoyad = rawSatir[key];
-                    else if (temizKey === 'girissaati' || temizKey === 'giris' || temizKey.includes('giriş')) satir.GirisSaati = rawSatir[key];
-                    else if (temizKey === 'cikissaati' || temizKey === 'cikis' || temizKey.includes('çıkış')) satir.CikisSaati = rawSatir[key];
-                    else if (temizKey === 'tarih' || temizKey === 'date') satir.Tarih = rawSatir[key];
-                    else if (temizKey === 'gün' || temizKey === 'gun' || temizKey === 'gunsayisi') satir.Gun = rawSatir[key];
-                    else if (temizKey === 'tutar' || temizKey === 'hakedis' || temizKey === 'alacak') satir.Tutar = rawSatir[key];
+                    if (['adsoyad', 'adisoyadi', 'personel', 'ad', 'isim'].includes(temizKey)) satir.AdSoyad = rawSatir[key];
+                    else if (temizKey.includes('giris') || temizKey.includes('giriş')) satir.GirisSaati = rawSatir[key];
+                    else if (temizKey.includes('cikis') || temizKey.includes('çıkış')) satir.CikisSaati = rawSatir[key];
+                    else if (temizKey.includes('tarih') || temizKey.includes('date')) satir.Tarih = rawSatir[key];
+                    else if (temizKey.includes('gün') || temizKey.includes('gun')) satir.Gun = rawSatir[key];
+                    else if (temizKey.includes('tutar') || temizKey.includes('hakedis') || temizKey.includes('alacak')) satir.Tutar = rawSatir[key];
                 }
 
                 if (!satir.AdSoyad) continue;
@@ -76,20 +75,20 @@ const puantajYukle = (req, res) => {
                     let aciklamaDetay = "";
                     let islemGecerli = false;
 
-                    // SENARYO A: Excel'de sadece "Tutar" girilmişse
+                    const ucret = Number(personel.ucretMiktari) || 0;
+
                     if (satir.Tutar) {
-                        gunlukHakedis = Number(satir.Tutar);
+                        let temizTutar = satir.Tutar.toString().replace(/\./g, '').replace(',', '.');
+                        gunlukHakedis = Number(temizTutar) || 0;
                         aciklamaDetay = `Manuel Puantaj Tutarı İşlendi`;
                         islemGecerli = true;
                     }
-                    // SENARYO B: Excel'de sadece "Gün" girilmişse
                     else if (satir.Gun) {
-                        const gunKatsayi = Number(satir.Gun);
-                        gunlukHakedis = gunKatsayi * personel.ucretMiktari;
+                        let gunKatsayi = Number(satir.Gun.toString().replace(',', '.')) || 1;
+                        gunlukHakedis = gunKatsayi * ucret;
                         aciklamaDetay = `${gunKatsayi} Günlük Çalışma Tahakkuku`;
                         islemGecerli = true;
                     }
-                    // SENARYO C: Excel'de detaylı "Giriş" ve "Çıkış" saatleri varsa
                     else if (satir.GirisSaati != null && satir.CikisSaati != null) {
                         const gercekGiris = timeToMinutes(satir.GirisSaati);
                         const cikis = timeToMinutes(satir.CikisSaati);
@@ -97,38 +96,29 @@ const puantajYukle = (req, res) => {
                         if (gercekGiris > 0 && cikis > gercekGiris) {
                             let islemGorecekGiris = gercekGiris;
                             const gecikmeSuresi = gercekGiris - mesaiBaslangicDakika;
-
-                            if (gecikmeSuresi > 0 && gecikmeSuresi <= (tolerans || 0)) {
-                                islemGorecekGiris = mesaiBaslangicDakika;
-                            }
+                            if (gecikmeSuresi > 0 && gecikmeSuresi <= (tolerans || 0)) islemGorecekGiris = mesaiBaslangicDakika;
 
                             let toplamDakika = cikis - islemGorecekGiris;
-                            if (islemGorecekGiris <= molaBasDakika && cikis >= molaBitDakika) {
-                                toplamDakika -= molaSure;
-                            }
+                            if (islemGorecekGiris <= molaBasDakika && cikis >= molaBitDakika) toplamDakika -= molaSure;
 
                             const calismaSaati = toplamDakika / 60;
                             const gunKatsayi = calismaSaati / 10;
 
-                            if (personel.ucretTipi === 'Günlük') {
-                                gunlukHakedis = gunKatsayi * personel.ucretMiktari;
-                            } else if (personel.ucretTipi === 'Saatlik') {
-                                gunlukHakedis = calismaSaati * personel.ucretMiktari;
-                            } else {
-                                gunlukHakedis = calismaSaati * (personel.ucretMiktari / 260);
-                            }
+                            if (personel.ucretTipi === 'Günlük') gunlukHakedis = gunKatsayi * ucret;
+                            else if (personel.ucretTipi === 'Saatlik') gunlukHakedis = calismaSaati * ucret;
+                            else gunlukHakedis = calismaSaati * (ucret / 260);
+
                             aciklamaDetay = `${gunKatsayi.toFixed(1)} Günlük Çalışma Tahakkuku`;
                             islemGecerli = true;
                         }
                     }
 
-                    // 🚀 EĞER HERHANGİ BİR ÇALIŞMA VERİSİ BULUNDUYSA ALACAK YAZ!
                     if (islemGecerli) {
-                        // 1. ŞİRKET İŞÇİYE BORÇLANIYOR (Bakiyeyi artır)
-                        personel.bakiye = Number((personel.bakiye || 0)) + Number(gunlukHakedis);
-                        await personel.save();
+                        // 🚀 ÇÖZÜM NOKTASI: MATEMATİKSEL GARANTİ
+                        let hakedisNum = Number(gunlukHakedis) || 0;
+                        let anlikBakiye = Number(personel.bakiye) || 0;
+                        let yeniBakiye = anlikBakiye + hakedisNum;
 
-                        // Excel Tarih düzeltmesi
                         let islemTarihiMetni = new Date().toLocaleDateString('tr-TR');
                         if (satir.Tarih) {
                             if (typeof satir.Tarih === 'number') {
@@ -139,25 +129,33 @@ const puantajYukle = (req, res) => {
                             }
                         }
 
-                        // 2. EKSTREDE GÖZÜKECEK OLAN O YEŞİL "ALACAK (HAKEDİŞ)" SATIRINI OLUŞTUR
-                        await PersonelHareket.create({
-                            personelId: personel._id,
-                            islemTipi: 'Hakediş', // Raporlama bunu yeşil Alacak sütununa atar
-                            tutar: Number(Math.round(gunlukHakedis)),
-                            bakiyeSonrasi: Number(Math.round(personel.bakiye)),
-                            aciklama: `${islemTarihiMetni} Puantajı: ${aciklamaDetay}`
-                        });
+                        // 🚀 ÇÖZÜM NOKTASI: ÖNCE DEFTERE YAZ, EĞER HATA VERMEZSE BAKİYEYİ ARTIR!
+                        try {
+                            await PersonelHareket.create({
+                                personelId: personel._id,
+                                islemTipi: 'Hakediş',
+                                tutar: Math.round(hakedisNum),
+                                bakiyeSonrasi: Math.round(yeniBakiye),
+                                aciklama: `${islemTarihiMetni} Puantajı: ${aciklamaDetay}`
+                            });
 
-                        basariliTahakkuklar.push({
-                            isim: personel.adSoyad,
-                            tahakkukTutar: Math.round(gunlukHakedis),
-                            yeniBakiye: Math.round(personel.bakiye)
-                        });
+                            // Ekstre başarıyla oluştuysa asıl bakiyeyi güncelle
+                            personel.bakiye = yeniBakiye;
+                            await personel.save();
+
+                            basariliTahakkuklar.push({
+                                isim: personel.adSoyad,
+                                tahakkukTutar: Math.round(hakedisNum),
+                                yeniBakiye: Math.round(yeniBakiye)
+                            });
+                        } catch (hareketHata) {
+                            eksikBasimlar.push({
+                                isim: personel.adSoyad,
+                                mesaj: `Deftere Kayıt Hatası: Bilgilerde matematiksel bir sorun var (${hareketHata.message})`
+                            });
+                        }
                     } else {
-                        eksikBasimlar.push({
-                            isim: aranacakIsim,
-                            mesaj: "Uygun saat, gün veya tutar verisi bulunamadı."
-                        });
+                        eksikBasimlar.push({ isim: aranacakIsim, mesaj: "Uygun saat, gün veya tutar verisi hesaplanamadı." });
                     }
                 } else {
                     if (!bulunamayanlarMap[aranacakIsim]) bulunamayanlarMap[aranacakIsim] = { isim: aranacakIsim, basimSayisi: 0 };
@@ -166,7 +164,7 @@ const puantajYukle = (req, res) => {
             }
 
             res.status(200).json({
-                mesaj: "Puantaj tahakkukları ALACAK olarak deftere işlendi!",
+                mesaj: "Puantaj işlemi tamamlandı.",
                 ozet: { basariliTahakkuklar, sistemdeBulunamayanlar: Object.values(bulunamayanlarMap), eksikBasimlar }
             });
 
