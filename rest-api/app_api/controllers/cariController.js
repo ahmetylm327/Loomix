@@ -88,7 +88,7 @@ const getCariEkstre = async (req, res) => {
 
         // Üretim döngüsü
         uretimler.forEach(u => {
-            const tutar = u.quantity * (u.productId?.birimFiyat || 0);
+            const tutar = u.quantity * (u.birimFiyat || 0);
             ekstre.push({
                 key: u._id,
                 tarih: u.productionDate,

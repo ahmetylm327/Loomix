@@ -6,7 +6,6 @@ const uretimSema = new mongoose.Schema({
         ref: 'Urun',
         required: true
     },
-    // 🚀 BÜYÜK EKSİK GİDERİLDİ: Artık malın kime dikildiğini biliyoruz!
     cariId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Cari',
@@ -16,6 +15,12 @@ const uretimSema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 1
+    },
+    // 🚀 BÜYÜK YENİLİK: Her fişin kendine özel, o anki birim fiyatı!
+    birimFiyat: {
+        type: Number,
+        required: true,
+        min: 0
     },
     entryType: {
         type: String,
@@ -31,5 +36,4 @@ const uretimSema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Eğer model zaten tanımlıysa tekrar tanımlamamak için güvenlik önlemi
 module.exports = mongoose.models.Uretim || mongoose.model('Uretim', uretimSema, 'uretimler');

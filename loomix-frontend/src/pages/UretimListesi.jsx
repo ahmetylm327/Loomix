@@ -11,12 +11,11 @@ const { TextArea } = Input;
 const UretimGirisi = () => {
     const [uretimler, setUretimler] = useState([]);
     const [urunler, setUrunler] = useState([]);
-    const [cariler, setCariler] = useState([]); // 🚀 YENİ: Firmaları tutacağımız liste
+    const [cariler, setCariler] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
 
-    // Sayfa açıldığında verileri getir
     useEffect(() => {
         verileriGetir();
     }, []);
@@ -24,11 +23,10 @@ const UretimGirisi = () => {
     const verileriGetir = async () => {
         setLoading(true);
         try {
-            // Üretimleri, Ürünleri ve Firmaları (Carileri) aynı anda çekiyoruz
             const [uretimRes, urunRes, cariRes] = await Promise.all([
                 axiosInstance.get('/production'),
                 axiosInstance.get('/products'),
-                axiosInstance.get('/caris') // 🚀 YENİ: Firmaları çeken istek
+                axiosInstance.get('/caris')
             ]);
 
             setUretimler(uretimRes.data);
@@ -41,6 +39,15 @@ const UretimGirisi = () => {
         }
     };
 
+    // 🚀 SİHİRLİ DOKUNUŞ: Ürün seçilince fiyatı otomatik getir
+    const handleUrunDegisimi = (urunId) => {
+        const secilenUrun = urunler.find(u => u._id === urunId);
+        if (secilenUrun) {
+            // Formdaki birimFiyat kutusuna ürünün varsayılan fiyatını çakar
+            form.setFieldsValue({ birimFiyat: secilenUrun.birimFiyat });
+        }
+    };
+
     const handleUretimEkle = async (values) => {
         try {
             const payload = {
@@ -49,10 +56,10 @@ const UretimGirisi = () => {
             };
 
             await axiosInstance.post('/production', payload);
-            message.success("Üretim fişi kesildi ve Cari hesaba borç olarak yansıdı!");
+            message.success("Üretim fişi kesildi ve Cari hesaba belirtilen fiyattan borç yansıdı!");
             setIsModalVisible(false);
             form.resetFields();
-            verileriGetir(); // Tabloyu güncelle
+            verileriGetir();
         } catch (error) {
             message.error("Üretim eklenirken hata oluştu!");
         }
@@ -76,7 +83,7 @@ const UretimGirisi = () => {
         },
         {
             title: 'Firma (Cari)',
-            dataIndex: ['cariId', 'firmaAdi'], // 🚀 YENİ: Arka plandan gelen firma adını gösterir
+            dataIndex: ['cariId', 'firmaAdi'],
             render: (text) => <Tag color="blue">{text || 'Bilinmiyor'}</Tag>
         },
         {
@@ -88,12 +95,21 @@ const UretimGirisi = () => {
             title: 'Adet',
             dataIndex: 'quantity',
             align: 'right',
-            render: (val) => <Tag color="green" style={{ fontSize: '14px' }}>{val} Adet</Tag>
+            render: (val) => <b>{val}</b>
         },
         {
-            title: 'Türü',
-            dataIndex: 'entryType',
-            render: (text) => <Tag color={text === 'Günlük' ? 'default' : 'purple'}>{text}</Tag>
+            title: 'Birim Fiyat',
+            dataIndex: 'birimFiyat',
+            align: 'right',
+            render: (val) => <Tag color="cyan">{val} ₺</Tag> // Ekranda uygulanan fiyatı gösteriyoruz
+        },
+        {
+            title: 'Fiş Tutarı',
+            key: 'toplamTutar',
+            align: 'right',
+            render: (_, record) => (
+                <b style={{ color: '#52c41a' }}>{(record.quantity * (record.birimFiyat || 0)).toLocaleString()} ₺</b>
+            )
         },
         {
             title: 'Notlar',
@@ -134,17 +150,16 @@ const UretimGirisi = () => {
             </Card>
 
             <Modal
-                title="Yeni Üretim Fişi Girişi"
+                title="Yeni Üretim Fişi Kes"
                 open={isModalVisible}
                 onOk={() => form.submit()}
                 onCancel={() => { setIsModalVisible(false); form.resetFields(); }}
                 okText="Fişi Kaydet ve Borçlandır"
                 cancelText="İptal"
-                width={600}
+                width={700}
             >
                 <Form form={form} layout="vertical" onFinish={handleUretimEkle} initialValues={{ entryType: 'Günlük', productionDate: dayjs() }}>
                     <Row gutter={16}>
-                        {/* 🚀 KUTSAL BAĞLANTI: Firma (Cari) Seçimi */}
                         <Col span={24}>
                             <Form.Item name="cariId" label="Firma (Kime Dikildi?)" rules={[{ required: true, message: 'Lütfen bir firma seçin!' }]}>
                                 <Select placeholder="Firma Seçin" showSearch optionFilterProp="children" size="large">
@@ -155,16 +170,25 @@ const UretimGirisi = () => {
                             </Form.Item>
                         </Col>
 
-                        <Col span={16}>
+                        <Col span={10}>
                             <Form.Item name="productId" label="Dikilen Ürün" rules={[{ required: true, message: 'Lütfen ürün seçin!' }]}>
-                                <Select placeholder="Ürün Seçin" size="large">
+                                {/* 🚀 Ürün seçildiğinde handleUrunDegisimi fonksiyonu tetiklenir */}
+                                <Select placeholder="Ürün Seçin" size="large" onChange={handleUrunDegisimi}>
                                     {urunler.map(urun => (
-                                        <Option key={urun._id} value={urun._id}>{urun.urunAdi} ({urun.birimFiyat} ₺)</Option>
+                                        <Option key={urun._id} value={urun._id}>{urun.urunAdi}</Option>
                                     ))}
                                 </Select>
                             </Form.Item>
                         </Col>
-                        <Col span={8}>
+
+                        <Col span={7}>
+                            {/* 🚀 MÜŞTERİNİN İSTEDİĞİ ÖZEL FİYAT ALANI BURASI! */}
+                            <Form.Item name="birimFiyat" label="Uygulanacak Fiyat" rules={[{ required: true, message: 'Fiyat girin!' }]}>
+                                <InputNumber min={0} step={0.01} style={{ width: '100%' }} size="large" addonAfter="₺" />
+                            </Form.Item>
+                        </Col>
+
+                        <Col span={7}>
                             <Form.Item name="quantity" label="Adet" rules={[{ required: true, message: 'Adet girin!' }]}>
                                 <InputNumber min={1} style={{ width: '100%' }} size="large" />
                             </Form.Item>
@@ -188,7 +212,7 @@ const UretimGirisi = () => {
                     </Row>
 
                     <Form.Item name="notes" label="Notlar (Opsiyonel)">
-                        <TextArea rows={2} placeholder="Sipariş detayı, renk vb. notlar girebilirsiniz..." />
+                        <TextArea rows={2} placeholder="Sipariş detayı, iskonto sebebi vb. notlar..." />
                     </Form.Item>
                 </Form>
             </Modal>
