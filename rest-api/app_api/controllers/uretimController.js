@@ -5,7 +5,6 @@ const Cari = mongoose.model('Cari');
 
 const uretimEkle = async (req, res) => {
     try {
-        // 🚀 birimFiyat'ı da req.body'den yakalıyoruz
         const { productId, cariId, quantity, birimFiyat, entryType, productionDate, notes } = req.body;
 
         const urun = await Urun.findById(productId);
@@ -14,27 +13,36 @@ const uretimEkle = async (req, res) => {
         const cari = await Cari.findById(cariId);
         if (!cari) return res.status(404).json({ mesaj: "Firma (Cari) Bulunamadı" });
 
-        // Eğer adam formda fiyatı boş bıraktıysa, ürünün standart fiyatını kullan
+        // Ekranda girilen özel fiyatı alıyoruz
         const uygulanacakFiyat = birimFiyat !== undefined ? Number(birimFiyat) : (urun.birimFiyat || 0);
 
+        // 1. FİŞİ KES VE FİYATI MÜHÜRLE (Eski Fişler Koruma Altında)
         const yeniUretim = new Uretim({
             productId,
             cariId,
             quantity,
-            birimFiyat: uygulanacakFiyat, // 🚀 Fiyatı fişe mühürlüyoruz!
+            birimFiyat: uygulanacakFiyat, // O anki fiyat fişe mühürlendi!
             entryType: entryType || "Günlük",
             productionDate,
             notes
         });
         await yeniUretim.save();
 
-        // 🚀 O anki güncel/özel fiyat ile adeti çarpıp borç yazıyoruz
+        // 2. FİRMAYA BORCUNU YAZ
         const islemTutari = uygulanacakFiyat * quantity;
         cari.bakiye = (cari.bakiye || 0) + islemTutari;
         await cari.save();
 
+        // 3. 🚀 SİHİRLİ DOKUNUŞ: ÜRÜNÜN KALICI FİYATINI GÜNCELLE!
+        // Eğer patron fiş keserken fiyatı değiştirdiyse, sistem bunu anlar ve "Ürünler" tablosuna zam/indirim uygular.
+        if (uygulanacakFiyat !== urun.birimFiyat) {
+            urun.birimFiyat = uygulanacakFiyat;
+            await urun.save();
+            console.log(`Otomatik Güncelleme: "${urun.urunAdi}" fiyatı ${uygulanacakFiyat} ₺ olarak ayarlandı!`);
+        }
+
         res.status(201).json({
-            status: "Üretim başarıyla işlendi ve Cari bakiyesine eklendi.",
+            status: "Üretim başarıyla işlendi.",
             productionId: yeniUretim._id,
             guncelBakiye: cari.bakiye
         });

@@ -36,21 +36,50 @@ const AppContent = () => {
   };
 
   const menuItems = [
-    { key: '/', icon: <DashboardOutlined />, label: <Link to="/">Dashboard</Link> },
-    { key: '/personeller', icon: <UserOutlined />, label: <Link to="/personeller">Personel Yönetimi</Link> },
-    { key: '/cariler', icon: <TeamOutlined />, label: <Link to="/cariler">Cari (Firma) Listesi</Link> },
-    { key: '/urunler', icon: <AppstoreOutlined />, label: <Link to="/urunler">Stok Tanımları</Link> },
-    { key: '/puantaj', icon: <FileDoneOutlined />, label: <Link to="/puantaj">Puantaj Yükleme</Link> },
-    { key: '/uretim', icon: <CodeSandboxOutlined />, label: <Link to="/uretim">Üretim Girişi</Link> },
-    { key: '/kasa', icon: <WalletOutlined />, label: <Link to="/kasa">Kasa Defteri</Link> },
-    { key: '/raporlar', icon: <BarChartOutlined />, label: <Link to="/raporlar">Raporlar ve Analiz</Link> },
-    { key: '/ai-tahmin', icon: <RobotOutlined />, label: <Link to="/ai-tahmin">AI Gelecek Tahmini</Link> }, {
-      key: 'cari-hareketleri',
-      icon: <FileTextOutlined />, // Bu ikonu yukarıda import etmeyi unutma
-      label: <Link to="/cari-hareketleri">Cari Hareketleri</Link>, // Yol (path) burası
+    // --- ANA EKRAN ---
+    { key: '/', icon: <DashboardOutlined />, label: <Link to="/">Ana Panel (Dashboard)</Link> },
+
+    // --- 1. TANIMLAMALAR (SİSTEMİN TEMELİ) ---
+    {
+      type: 'group',
+      label: '1. SİSTEM TANIMLARI',
+      children: [
+        { key: '/urunler', icon: <AppstoreOutlined />, label: <Link to="/urunler">Stok / Model Tanımları</Link> },
+        { key: '/cariler', icon: <TeamOutlined />, label: <Link to="/cariler">Cari (Firma) Kayıtları</Link> },
+        { key: '/personeller', icon: <UserOutlined />, label: <Link to="/personeller">Personel Listesi</Link> },
+      ],
+    },
+
+    // --- 2. ÜRETİM VE OPERASYON (SAHANIN KALBİ) ---
+    {
+      type: 'group',
+      label: '2. ÜRETİM VE SAHA',
+      children: [
+        { key: '/uretim', icon: <CodeSandboxOutlined />, label: <Link to="/uretim">Fiş / Üretim Girişi</Link> },
+        { key: '/puantaj', icon: <FileDoneOutlined />, label: <Link to="/puantaj">Puantaj / Mesai Yükle</Link> },
+      ],
+    },
+
+    // --- 3. FİNANS VE KASA (PARA TRAFİĞİ) ---
+    {
+      type: 'group',
+      label: '3. FİNANS YÖNETİMİ',
+      children: [
+        { key: '/kasa', icon: <WalletOutlined />, label: <Link to="/kasa">Kasa İşlemleri (Gelir/Gider)</Link> },
+      ],
+    },
+
+    // --- 4. RAPORLAR VE ANALİZ (PATRON EKRANI) ---
+    {
+      type: 'group',
+      label: '4. RAPOR VE ANALİZ',
+      children: [
+        { key: '/cari-hareketleri', icon: <FileTextOutlined />, label: <Link to="/cari-hareketleri">Tüm Cari Hareketler</Link> },
+        { key: '/raporlar', icon: <BarChartOutlined />, label: <Link to="/raporlar">Genel Raporlar</Link> },
+        { key: '/ai-tahmin', icon: <RobotOutlined />, label: <Link to="/ai-tahmin">Yapay Zeka (AI) Asistan</Link> },
+      ],
     },
   ];
-
   return (
     <Layout style={{ minHeight: '100vh', margin: 0, padding: 0 }}>
       {/* Sol Menü (Sider) */}
