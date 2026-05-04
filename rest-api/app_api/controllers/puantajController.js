@@ -1,6 +1,7 @@
 const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
+const dayjs = require('dayjs');
 
 let Personel;
 try { Personel = mongoose.model('Personel'); }
@@ -57,7 +58,6 @@ const excelTarihCevir = (val) => {
     return val.toString();
 };
 
-// 🚀 YENİ: Tarihin Cumartesi olup olmadığını kesin olarak tespit eden dedektif
 const isCumartesi = (val) => {
     if (!val) return false;
     let dateObj;
@@ -66,13 +66,12 @@ const isCumartesi = (val) => {
     } else {
         const parts = val.toString().split(/[./-]/);
         if (parts.length === 3) {
-            // Türkiye standartı: DD.MM.YYYY
             dateObj = new Date(parts[2], parts[1] - 1, parts[0]);
         } else {
             dateObj = new Date(val);
         }
     }
-    return dateObj.getDay() === 6; // 6 = Cumartesi
+    return dateObj.getDay() === 6;
 };
 
 const puantajYukle = (req, res) => {
@@ -84,7 +83,6 @@ const puantajYukle = (req, res) => {
             let settings;
             if (Setting) settings = await Setting.findOne({ key: 'mesai_ayarlari' });
 
-            // 🚀 YENİ: Sadece Saat değil, Cumartesi için net Başlangıç ve Bitiş sınırı koyduk!
             if (!settings) settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15, ctesiBaslangic: "08:00", ctesiBitis: "13:00" } };
 
             const { baslangic, bitis, molaBas, molaBit, tolerans, ctesiBaslangic = "08:00", ctesiBitis = "13:00" } = settings.value;
@@ -115,10 +113,11 @@ const puantajYukle = (req, res) => {
                     if (rawSatir[key] === null) continue;
                     let temizKey = metinTemizle(key);
 
+                    // 🚀 ÇÖZÜM BURADA: Sistemin kafası karışmasın diye "Tarih" araması, "Giriş" kelimesinin ÜSTÜNE alındı!
                     if (temizKey.includes('ad') || temizKey.includes('isim') || temizKey.includes('personel')) satir.AdSoyad = rawSatir[key];
-                    else if (temizKey.includes('giris')) satir.GirisSaati = rawSatir[key];
-                    else if (temizKey.includes('cikis')) satir.CikisSaati = rawSatir[key];
-                    else if (temizKey.includes('tarih') || temizKey.includes('date')) satir.Tarih = rawSatir[key];
+                    else if (temizKey.includes('tarih') || temizKey.includes('date')) satir.Tarih = rawSatir[key]; // ÖNCE TARİHİ AL
+                    else if (temizKey.includes('giris')) satir.GirisSaati = rawSatir[key]; // SONRA GİRİŞİ AL
+                    else if (temizKey.includes('cikis')) satir.CikisSaati = rawSatir[key]; // SONRA ÇIKIŞI AL
                     else if (temizKey.includes('gun') || temizKey.includes('mesai')) satir.Gun = rawSatir[key];
                     else if (temizKey.includes('tutar') || temizKey.includes('hakedis') || temizKey.includes('alacak')) satir.Tutar = rawSatir[key];
                 }
@@ -127,7 +126,7 @@ const puantajYukle = (req, res) => {
 
                 const aranacakIsim = satir.AdSoyad.toString().trim();
                 const satirTarihi = excelTarihCevir(satir.Tarih);
-                const buCumartesiMi = isCumartesi(satir.Tarih); // O gün cumartesi mi?
+                const buCumartesiMi = isCumartesi(satir.Tarih);
 
                 const personel = await Personel.findOne({
                     adSoyad: { $regex: new RegExp('^' + aranacakIsim + '$', 'i') },
@@ -156,40 +155,33 @@ const puantajYukle = (req, res) => {
 
                         if (gercekGiris > 0 && gercekCikis > gercekGiris) {
 
-                            // 🚀 YENİ MANTIK: Bugün Cumartesiyse sınırları ona göre çiz, Hafta içiyse normal sınır çiz.
                             const aktifBaslangic = buCumartesiMi ? timeToMinutes(ctesiBaslangic) : mesaiBaslangicDakika;
                             const aktifBitis = buCumartesiMi ? timeToMinutes(ctesiBitis) : mesaiBitisDakika;
 
                             let islemGorecekGiris = gercekGiris;
                             let islemGorecekCikis = gercekCikis;
 
-                            // ERKEN GELENE PARA YOK (Cumartesi 08:00'den önce gelse bile 08:00 sayılır)
                             if (gercekGiris < aktifBaslangic) islemGorecekGiris = aktifBaslangic;
                             else {
-                                // GEÇ KALANA KESİNTİ VAR (Toleransı geçerse saati kısaltır)
                                 const gecikmeSuresi = gercekGiris - aktifBaslangic;
                                 if (gecikmeSuresi <= (tolerans || 0)) islemGorecekGiris = aktifBaslangic;
                             }
 
-                            // GEÇ ÇIKANA PARA YOK (Cumartesi 13:00'ten sonra kalsa bile 13:00 sayılır)
                             if (gercekCikis > aktifBitis) islemGorecekCikis = aktifBitis;
 
                             let toplamDakika = islemGorecekCikis - islemGorecekGiris;
 
                             if (toplamDakika > 0) {
-                                // Sadece mola saati iş süresine denk gelirse molayı düş (Örn: Cumartesi 13:00'te bitiyorsa 12:30 molası düşülür)
                                 if (islemGorecekGiris <= molaBasDakika && islemGorecekCikis >= molaBitDakika) {
                                     toplamDakika -= molaSure;
                                 }
 
                                 const calismaSaati = toplamDakika / 60;
 
-                                // O günkü hedeflenen net saati bul (Mola varsa düşülmüş haliyle)
                                 let gunlukHedefDakika = aktifBitis - aktifBaslangic;
                                 if (aktifBaslangic <= molaBasDakika && aktifBitis >= molaBitDakika) gunlukHedefDakika -= molaSure;
                                 const gunlukHedefSaat = gunlukHedefDakika / 60;
 
-                                // İşçinin çalışma oranını o günün hedefine bölüyoruz
                                 gunKatsayi = calismaSaati / gunlukHedefSaat;
 
                                 if (gunKatsayi > 1) gunKatsayi = 1;
