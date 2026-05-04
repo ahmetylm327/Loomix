@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Typography, Upload, message, Table, Tag, Row, Col, Statistic, Alert, Button, Modal, Form, TimePicker, InputNumber, Divider } from 'antd';
-import { InboxOutlined, CheckCircleOutlined, WarningOutlined, DollarOutlined, SettingOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { InboxOutlined, CheckCircleOutlined, WarningOutlined, DollarOutlined, SettingOutlined, QuestionCircleOutlined, StopOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 
@@ -17,8 +17,6 @@ const PuantajYukle = () => {
         try {
             const res = await axiosInstance.get('/attendance/settings');
             const { baslangic, bitis, molaBas, molaBit, tolerans, ctesiBaslangic, ctesiBitis } = res.data;
-
-            // 🚀 ÇÖZÜM: Ekranda da sıfırın silinip 15'e dönmesini engelledik!
             const gecerliTolerans = (tolerans !== undefined && tolerans !== null) ? tolerans : 15;
 
             settingsForm.setFieldsValue({
@@ -80,61 +78,6 @@ const PuantajYukle = () => {
         showUploadList: false,
     };
 
-    const basariliSutunlar = [
-        {
-            title: 'Personel',
-            key: 'personel',
-            render: (_, record) => (
-                <div>
-                    <b style={{ color: '#1890ff', fontSize: '13px' }}>{record.isim}</b>
-                    {record.toleransUygulandiMi && <Tag color="cyan" style={{ marginLeft: 5, fontSize: '10px' }}>Tolerans</Tag>}
-                </div>
-            )
-        },
-        {
-            title: 'Hakediş & Tahakkuk',
-            key: 'tahakkuk',
-            render: (_, record) => (
-                <div>
-                    <Tag color="blue" style={{ fontSize: '11px' }}>Toplam {record.gun} Günlük</Tag>
-                    <b style={{ color: '#52c41a', fontSize: '14px', marginLeft: '5px' }}>+ {record.tahakkukTutar} ₺</b>
-                </div>
-            )
-        },
-        { title: 'Yeni Bakiye', dataIndex: 'yeniBakiye', align: 'right', render: b => <b style={{ fontSize: '14px' }}>{b} ₺</b> },
-    ];
-
-    const bulunamayanSutunlar = [
-        {
-            title: 'Cihazdaki İsim & Kayıt Bilgisi',
-            key: 'bilgi',
-            render: (_, record) => (
-                <div>
-                    <Text type="danger"><b>{record.isim}</b></Text><br />
-                    <span style={{ fontSize: '11px', color: '#8c8c8c' }}>
-                        Cihazda <b style={{ color: '#000' }}>{record.basimSayisi || record.gun}</b> kez basım kaydı tespit edildi.
-                    </span>
-                </div>
-            )
-        },
-        { title: 'Aksiyon', align: 'right', render: () => <Tag color="warning">Sisteme Ekleyin</Tag> }
-    ];
-
-    const eksikBasimSutunlar = [
-        { title: 'Personel', dataIndex: 'isim', render: val => <b>{val}</b> },
-        { title: 'Hatalı Tarih', dataIndex: 'tarih', render: val => <Tag color="blue">{val || '-'}</Tag> },
-        {
-            title: 'Giriş / Çıkış', key: 'saatler', render: (_, r) => (
-                <div>
-                    G: <Tag color={r.giris === '-' ? 'error' : 'default'}>{r.giris}</Tag>
-                    Ç: <Tag color={r.cikis === '-' ? 'error' : 'default'}>{r.cikis}</Tag>
-                </div>
-            )
-        },
-        { title: 'Hata Nedeni', dataIndex: 'mesaj', render: val => <Text type="danger">{val}</Text> },
-        { title: 'Durum', align: 'right', render: () => <Tag color="red">Maaş İşlenmedi</Tag> }
-    ];
-
     return (
         <div style={{ padding: '15px', background: '#f0f2f5', minHeight: '100vh', overflowX: 'hidden' }}>
             <Card variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginBottom: 20, padding: '5px' }}>
@@ -153,37 +96,23 @@ const PuantajYukle = () => {
                 </div>
             </Card>
 
-            <Modal
-                title="Fabrika Mesai ve Opsiyon Ayarları"
-                open={isSettingsModalVisible}
-                onOk={() => settingsForm.submit()}
-                onCancel={() => setIsSettingsModalVisible(false)}
-                okText="Ayarları Kaydet"
-                cancelText="Vazgeç"
-                width={600}
-            >
+            <Modal title="Fabrika Mesai Ayarları" open={isSettingsModalVisible} onOk={() => settingsForm.submit()} onCancel={() => setIsSettingsModalVisible(false)} width={600}>
                 <Form form={settingsForm} layout="vertical" onFinish={handleSettingsSave}>
                     <Divider orientation="left">Hafta İçi (Standart Mesai)</Divider>
                     <Row gutter={16}>
-                        <Col span={12}><Form.Item name="baslangic" label="Mesai Başlangıç" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
-                        <Col span={12}><Form.Item name="bitis" label="Mesai Bitiş" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={12}><Form.Item name="baslangic" label="Mesai Başlangıç"><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={12}><Form.Item name="bitis" label="Mesai Bitiş"><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
                     </Row>
-
                     <Divider orientation="left" style={{ borderColor: '#1890ff', color: '#1890ff' }}>Hafta Sonu (Cumartesi Özel Mesaisi)</Divider>
                     <Row gutter={16}>
-                        <Col span={12}><Form.Item name="ctesiBaslangic" label="Cumartesi Başlangıç" tooltip="Cumartesi günü işin başladığı kesin saat." rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
-                        <Col span={12}><Form.Item name="ctesiBitis" label="Cumartesi Bitiş" tooltip="Cumartesi günü işin bittiği kesin saat. (Bu saati dolduran tam yevmiye alır)" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={12}><Form.Item name="ctesiBaslangic" label="Cumartesi Başlangıç"><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={12}><Form.Item name="ctesiBitis" label="Cumartesi Bitiş"><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
                     </Row>
-
                     <Divider orientation="left">Mola & Tolerans</Divider>
                     <Row gutter={16}>
-                        <Col span={8}><Form.Item name="molaBas" label="Mola Başlangıç" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
-                        <Col span={8}><Form.Item name="molaBit" label="Mola Bitiş" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
-                        <Col span={8}>
-                            <Form.Item name="tolerans" label="Geç Kalma Toleransı">
-                                <InputNumber min={0} max={60} style={{ width: '100%' }} addonAfter="Dk" />
-                            </Form.Item>
-                        </Col>
+                        <Col span={8}><Form.Item name="molaBas" label="Mola Başlangıç"><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="molaBit" label="Mola Bitiş"><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="tolerans" label="Tolerans"><InputNumber min={0} style={{ width: '100%' }} addonAfter="Dk" /></Form.Item></Col>
                     </Row>
                 </Form>
             </Modal>
@@ -191,32 +120,34 @@ const PuantajYukle = () => {
             {rapor && (
                 <div>
                     <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
-                        <Col xs={24} sm={8}>
-                            <Card><Statistic title="İşlenen Personel" value={rapor.basariliTahakkuklar?.length || 0} prefix={<CheckCircleOutlined style={{ color: '#1890ff' }} />} /></Card>
-                        </Col>
-                        <Col xs={24} sm={8}>
-                            <Card><Statistic title="Dağıtılan Toplam" value={(rapor.basariliTahakkuklar || []).reduce((acc, curr) => acc + curr.tahakkukTutar, 0)} prefix={<DollarOutlined />} suffix="₺" styles={{ content: { color: '#3f8600' } }} /></Card>
-                        </Col>
-                        <Col xs={24} sm={8}>
-                            <Card><Statistic title="Eksik Basım (Hatalı)" value={rapor.eksikBasimlar?.length || 0} prefix={<QuestionCircleOutlined />} styles={{ content: { color: (rapor.eksikBasimlar?.length || 0) > 0 ? '#cf1322' : '#8c8c8c' } }} /></Card>
-                        </Col>
+                        <Col xs={24} sm={8}><Card><Statistic title="İşlenen Personel" value={rapor.basariliTahakkuklar?.length || 0} prefix={<CheckCircleOutlined style={{ color: '#1890ff' }} />} /></Card></Col>
+                        <Col xs={24} sm={8}><Card><Statistic title="Dağıtılan Toplam" value={(rapor.basariliTahakkuklar || []).reduce((acc, curr) => acc + curr.tahakkukTutar, 0)} prefix={<DollarOutlined />} suffix="₺" styles={{ content: { color: '#3f8600' } }} /></Card></Col>
+                        <Col xs={24} sm={8}><Card><Statistic title="Engellenen Mükerrer" value={rapor.zatenEklenenler?.length || 0} prefix={<StopOutlined />} styles={{ content: { color: '#fa8c16' } }} /></Card></Col>
                     </Row>
 
-                    {(rapor.eksikBasimlar?.length || 0) > 0 && (
-                        <Card title={<><QuestionCircleOutlined style={{ color: '#cf1322' }} /> Eksik Kart Basanlar / Sınır Dışı Kalanlar</>} style={{ marginBottom: 20, border: '1px solid #ffa39e' }} styles={{ body: { padding: 0 } }}>
-                            <Alert message="Bu personeller giriş/çıkış saatlerine uymadığı veya cihazda kart okutmadığı için sistem bu günü İŞLEMEDİ. Manuel düzeltiniz." type="error" banner />
-                            <Table dataSource={rapor.eksikBasimlar || []} columns={eksikBasimSutunlar} rowKey={(r, i) => r.isim + i} pagination={{ pageSize: 5 }} size="small" />
+                    {/* 🚀 YENİ EKLENEN KISIM: MÜKERRER KAYIT KALKANI UYARISI */}
+                    {(rapor.zatenEklenenler?.length || 0) > 0 && (
+                        <Card title={<><StopOutlined style={{ color: '#fa8c16' }} /> Mükerrer (Çift) Kayıt Koruması Devrede!</>} style={{ marginBottom: 20, border: '1px solid #ffe58f' }} styles={{ body: { padding: 0 } }}>
+                            <Alert message="Aşağıdaki personellerin bu tarihlerdeki maaşları daha önceden sisteme işlenmiş. Sistem ikinci kez maaş yazılmasını (çift hakedişi) ENGELLENDİ." type="warning" banner />
+                            <Table
+                                dataSource={rapor.zatenEklenenler || []}
+                                columns={[
+                                    { title: 'Personel', dataIndex: 'isim', render: val => <b>{val}</b> },
+                                    { title: 'Sistem Mesajı', dataIndex: 'mesaj', render: val => <Tag color="orange">{val}</Tag> }
+                                ]}
+                                rowKey="isim" pagination={{ pageSize: 5 }} size="small"
+                            />
                         </Card>
                     )}
 
-                    {(rapor.sistemdeBulunamayanlar?.length || 0) > 0 && (
-                        <Card title={<><WarningOutlined style={{ color: '#faad14' }} /> Kaydı Bulunamayanlar</>} style={{ marginBottom: 20 }} styles={{ body: { padding: 0 } }}>
-                            <Table dataSource={rapor.sistemdeBulunamayanlar || []} columns={bulunamayanSutunlar} rowKey="isim" pagination={{ pageSize: 5 }} size="small" />
+                    {(rapor.eksikBasimlar?.length || 0) > 0 && (
+                        <Card title={<><QuestionCircleOutlined style={{ color: '#cf1322' }} /> Sınır Dışı Kalanlar / Eksik Basımlar</>} style={{ marginBottom: 20, border: '1px solid #ffa39e' }} styles={{ body: { padding: 0 } }}>
+                            <Table dataSource={rapor.eksikBasimlar || []} columns={[{ title: 'Personel', dataIndex: 'isim', render: val => <b>{val}</b> }, { title: 'Tarih', dataIndex: 'tarih' }, { title: 'Hata', dataIndex: 'mesaj', render: val => <Text type="danger">{val}</Text> }]} rowKey={(r, i) => r.isim + i} pagination={{ pageSize: 5 }} size="small" />
                         </Card>
                     )}
 
                     <Card title={<><CheckCircleOutlined style={{ color: '#52c41a' }} /> Başarılı İşlemler</>} styles={{ body: { padding: 0 } }}>
-                        <Table dataSource={rapor.basariliTahakkuklar || []} columns={basariliSutunlar} rowKey={(r, i) => r.isim + i} pagination={{ pageSize: 5 }} size="small" />
+                        <Table dataSource={rapor.basariliTahakkuklar || []} columns={[{ title: 'Personel', dataIndex: 'isim' }, { title: 'Tahakkuk', dataIndex: 'tahakkukTutar', render: val => <b style={{ color: '#52c41a' }}>+ {val} ₺</b> }, { title: 'Yeni Bakiye', dataIndex: 'yeniBakiye', render: val => <b>{val} ₺</b> }]} rowKey={(r, i) => r.isim + i} pagination={{ pageSize: 5 }} size="small" />
                     </Card>
                 </div>
             )}

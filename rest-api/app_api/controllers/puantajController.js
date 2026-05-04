@@ -86,8 +86,6 @@ const puantajYukle = (req, res) => {
             if (!settings) settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15, ctesiBaslangic: "08:00", ctesiBitis: "13:00" } };
 
             const { baslangic, bitis, molaBas, molaBit, tolerans, ctesiBaslangic = "08:00", ctesiBitis = "13:00" } = settings.value;
-
-            // 🚀 ÇÖZÜM: 0'ı boş sanıp 15'e geri dönmesini engelliyoruz!
             const gecerliTolerans = (tolerans !== undefined && tolerans !== null) ? Number(tolerans) : 15;
 
             const mesaiBaslangicDakika = timeToMinutes(baslangic);
@@ -109,6 +107,7 @@ const puantajYukle = (req, res) => {
             let bulunamayanlarMap = {};
             let islenenPersoneller = {};
 
+            // 1. AŞAMA: EXCEL'İ OKU VE HESAPLA
             for (let rawSatir of excelVerisiRaw) {
                 let satir = { AdSoyad: null, GirisSaati: null, CikisSaati: null, Tarih: null, Gun: null, Tutar: null };
 
@@ -130,8 +129,9 @@ const puantajYukle = (req, res) => {
                 const satirTarihi = excelTarihCevir(satir.Tarih);
                 const buCumartesiMi = isCumartesi(satir.Tarih);
 
+                // İsimde gizli boşluk veya regex hatası olmaması için kaçış ekledik
                 const personel = await Personel.findOne({
-                    adSoyad: { $regex: new RegExp('^' + aranacakIsim + '$', 'i') },
+                    adSoyad: { $regex: new RegExp('^' + aranacakIsim.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') },
                     aktifMi: true
                 });
 
@@ -166,7 +166,6 @@ const puantajYukle = (req, res) => {
                             if (gercekGiris < aktifBaslangic) islemGorecekGiris = aktifBaslangic;
                             else {
                                 const gecikmeSuresi = gercekGiris - aktifBaslangic;
-                                // 🚀 ÇÖZÜM: gecerliTolerans devrede!
                                 if (gecikmeSuresi <= gecerliTolerans) islemGorecekGiris = aktifBaslangic;
                             }
 
@@ -220,71 +219,54 @@ const puantajYukle = (req, res) => {
                 }
             }
 
+            // 2. AŞAMA: MÜKERRER KONTROLÜ VE VERİTABANINA YAZMA
+            let zatenEklenenler = [];
+
             for (const pId in islenenPersoneller) {
-                // ... (Yukarıdaki excel okuma kodları aynı kalıyor) ...
+                const data = islenenPersoneller[pId];
+                const p = data.personel;
+                const hakedisNum = Math.round(Number(data.toplamHakedis) || 0);
+                const netGun = Number(data.toplamGun.toFixed(2));
 
-                let zatenEklenenler = []; // 🚀 YENİ: Çift eklenenleri tutacağız
+                let islemTarihiMetni = data.tarihler[0];
+                if (data.tarihler.length > 1) {
+                    let ilkTarih = data.tarihler[0];
+                    let sonTarih = data.tarihler[data.tarihler.length - 1];
+                    if (ilkTarih !== sonTarih) islemTarihiMetni = `${ilkTarih} ile ${sonTarih}`;
+                }
 
-                for (const pId in islenenPersoneller) {
-                    const data = islenenPersoneller[pId];
-                    const p = data.personel;
-                    const hakedisNum = Math.round(Number(data.toplamHakedis) || 0);
-                    const netGun = Number(data.toplamGun.toFixed(2));
+                const beklenenAciklama = `${islemTarihiMetni} Tarihleri Arası: Toplam ${netGun} Günlük Çalışma`;
 
-                    let islemTarihiMetni = data.tarihler[0];
-                    if (data.tarihler.length > 1) {
-                        let ilkTarih = data.tarihler[0];
-                        let sonTarih = data.tarihler[data.tarihler.length - 1];
-                        if (ilkTarih !== sonTarih) islemTarihiMetni = `${ilkTarih} ile ${sonTarih}`;
-                    }
+                // KORUMA KALKANI: Bu işçiye daha önce bu fiş kesilmiş mi?
+                let mukerrerKayit = false;
+                if (PersonelHareket) {
+                    const oncekiKayit = await PersonelHareket.findOne({
+                        personelId: p._id,
+                        aciklama: beklenenAciklama,
+                        islemTipi: 'Hakediş'
+                    });
+                    if (oncekiKayit) mukerrerKayit = true;
+                }
 
-                    const beklenenAciklama = `${islemTarihiMetni} Tarihleri Arası: Toplam ${netGun} Günlük Çalışma`;
+                if (mukerrerKayit) {
+                    zatenEklenenler.push({
+                        isim: p.adSoyad,
+                        mesaj: `${islemTarihiMetni} tarihleri ZATEN KAYITLI.`
+                    });
+                    continue; // Çift yazmayı engeller ve sıradakine geçer
+                }
 
-                    // 🚀 ZIRH DEVREDE: Bu işçiye, bu tarihlerde, bu açıklamayla zaten hakediş girilmiş mi?
-                    let mukerrerKayit = false;
-                    if (PersonelHareket) {
-                        const oncekiKayit = await PersonelHareket.findOne({
-                            personelId: p._id,
-                            aciklama: beklenenAciklama,
-                            islemTipi: 'Hakediş'
-                        });
-                        if (oncekiKayit) mukerrerKayit = true;
-                    }
+                // EĞER TEMİZSE KAYDET
+                p.bakiye = (p.bakiye || 0) + hakedisNum;
+                await p.save();
 
-                    if (mukerrerKayit) {
-                        // İşçinin bakiyesini şişirme, sadece rapora ekle
-                        zatenEklenenler.push({
-                            isim: p.adSoyad,
-                            mesaj: `${islemTarihiMetni} tarihleri sistemde ZATEN KAYITLI. Çift maaş yazılmadı!`
-                        });
-                        continue; // 🚀 İşlemi pas geç ve diğer işçiye atla!
-                    }
-
-                    // EĞER TEMİZSE NORMAL KAYIT İŞLEMİNE DEVAM ET
-                    p.bakiye = (p.bakiye || 0) + hakedisNum;
-                    await p.save();
-
-                    if (PersonelHareket) {
-                        await PersonelHareket.create({
-                            personelId: p._id,
-                            islemTipi: 'Hakediş',
-                            tutar: hakedisNum,
-                            bakiyeSonrasi: p.bakiye,
-                            aciklama: beklenenAciklama
-                        });
-
-                        basariliTahakkuklar.push({ isim: p.adSoyad, tahakkukTutar: hakedisNum, gun: netGun.toString(), yeniBakiye: p.bakiye });
-                    }
-
-                    // 🚀 Rapor ekranına mükerrer (çift) kayıtları da gönderiyoruz
-                    res.status(200).json({
-                        mesaj: "Toplu puantaj işlemi tamamlandı.",
-                        ozet: {
-                            basariliTahakkuklar,
-                            sistemdeBulunamayanlar: Object.values(bulunamayanlarMap),
-                            eksikBasimlar,
-                            zatenEklenenler // Frontend'e bu listeyi de gönderdik
-                        }
+                if (PersonelHareket) {
+                    await PersonelHareket.create({
+                        personelId: p._id,
+                        islemTipi: 'Hakediş',
+                        tutar: hakedisNum,
+                        bakiyeSonrasi: p.bakiye,
+                        aciklama: beklenenAciklama
                     });
                 }
 
@@ -292,11 +274,17 @@ const puantajYukle = (req, res) => {
             }
 
             res.status(200).json({
-                mesaj: "Toplu puantaj işlemi tamamlandı ve tek satır halinde ekstreye yansıdı.",
-                ozet: { basariliTahakkuklar, sistemdeBulunamayanlar: Object.values(bulunamayanlarMap), eksikBasimlar }
+                mesaj: "Toplu puantaj işlemi tamamlandı.",
+                ozet: {
+                    basariliTahakkuklar,
+                    sistemdeBulunamayanlar: Object.values(bulunamayanlarMap),
+                    eksikBasimlar,
+                    zatenEklenenler // Frontend'e bu veriyi yolladık
+                }
             });
 
         } catch (hata) {
+            console.error("PUANTAJ HESAPLAMA ESNASINDA HATA:", hata);
             res.status(500).json({ mesaj: "Sistem hatası", detay: hata.message });
         }
     });
