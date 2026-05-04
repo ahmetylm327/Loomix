@@ -3,6 +3,21 @@ const Odeme = mongoose.model('Odeme');
 const Cari = mongoose.model('Cari');
 const Personel = mongoose.model('Personel');
 
+// 🚀 YENİ: Personelin kendi hareket defterini (Ekstresini) sisteme çağırıyoruz
+let PersonelHareket;
+try { PersonelHareket = mongoose.model('PersonelHareket'); }
+catch (error) {
+    const yedekHareketSemasi = new mongoose.Schema({
+        personelId: { type: mongoose.Schema.Types.ObjectId, ref: 'Personel', required: true },
+        islemTarihi: { type: Date, default: Date.now },
+        islemTipi: { type: String, enum: ['Hakediş', 'Ödeme', 'Avans', 'Prim', 'Avans İadesi'], required: true },
+        aciklama: { type: String },
+        tutar: { type: Number, required: true },
+        bakiyeSonrasi: { type: Number }
+    });
+    PersonelHareket = mongoose.model('PersonelHareket', yedekHareketSemasi, 'personelhareketleri');
+}
+
 const odemeEkle = async (req, res) => {
     try {
         console.log("KASAYA GELEN VERİ:", req.body);
@@ -30,7 +45,7 @@ const odemeEkle = async (req, res) => {
             notlar: gelenNotlar
         });
 
-        // 2. KUTSAL BAĞLANTI: Eğer bu işlem bir "Firma (Cari)" işlemiyse hesaptan düş/ekle
+        // 2A. KUTSAL BAĞLANTI: CARİ (FİRMA) İŞLEMİ
         if (gelenIlgiliId && (gelenKategori === 'Cari' || gelenKategori === 'Firma')) {
             const cariHesap = await Cari.findById(gelenIlgiliId);
 
@@ -47,6 +62,37 @@ const odemeEkle = async (req, res) => {
             }
         }
 
+        // 🚀 2B. KUTSAL BAĞLANTI: PERSONEL (MAAŞ/AVANS) İŞLEMİ (AÇIK KAPATILDI!)
+        else if (gelenIlgiliId && (gelenKategori === 'Personel' || gelenKategori === 'Maaş' || gelenKategori === 'Avans')) {
+            const isci = await Personel.findById(gelenIlgiliId);
+
+            if (isci) {
+                let pIslemTipi = 'Ödeme';
+
+                if (gelenIslemYonu === 'Gider') {
+                    // Kasadan para çıktı (İşçiye maaş/avans verdik) -> İçerideki alacağı (bakiye) AZALIR
+                    isci.bakiye = (isci.bakiye || 0) - gelenTutar;
+                    pIslemTipi = (gelenKategori === 'Avans') ? 'Avans' : 'Ödeme';
+                } else if (gelenIslemYonu === 'Gelir') {
+                    // İşçiden kasaya para girdi (İşçi aldığı avansı geri getirdi) -> Alacağı (bakiye) tekrar ARTAR
+                    isci.bakiye = (isci.bakiye || 0) + gelenTutar;
+                    pIslemTipi = 'Avans İadesi';
+                }
+                await isci.save();
+
+                // 🚀 MUHASEBE ŞAHESERİ: İşçinin ekstresine de "Kasadan Ödendi" diye mühür basıyoruz!
+                await PersonelHareket.create({
+                    personelId: isci._id,
+                    islemTarihi: gelenTarih,
+                    islemTipi: pIslemTipi,
+                    tutar: gelenTutar,
+                    aciklama: `Kasa Üzerinden: ${gelenNotlar || pIslemTipi}`,
+                    bakiyeSonrasi: isci.bakiye
+                });
+                console.log(`Personel Bakiye Güncellendi. Yeni Bakiye: ${isci.bakiye}`);
+            }
+        }
+
         // Kasadaki güncel parayı hesaplıyoruz
         const tumOdemeler = await Odeme.find();
         let guncelKasa = 0;
@@ -57,7 +103,7 @@ const odemeEkle = async (req, res) => {
 
         res.status(201).json({
             transactionId: yeniOdeme._id,
-            status: "Finansal hareket işlendi ve defterlere kaydedildi.",
+            status: "Finansal hareket işlendi ve defterlere (Firma/Personel) anında yansıdı.",
             currentCashBalance: guncelKasa
         });
     } catch (hata) {
@@ -101,8 +147,46 @@ const odemeGuncelle = async (req, res) => {
 const odemeSil = async (req, res) => {
     try {
         const id = req.params.id;
-        const silinenOdeme = await Odeme.findByIdAndDelete(id);
-        if (!silinenOdeme) return res.status(404).json({ mesaj: "İşlem kaydı bulunamadı." });
+
+        // 🚀 1. Adım: Silinecek ödemeyi bul
+        const silinecekOdeme = await Odeme.findById(id);
+        if (!silinecekOdeme) return res.status(404).json({ mesaj: "İşlem kaydı bulunamadı." });
+
+        const { tutar, islemYonu, kategori, ilgiliId } = silinecekOdeme;
+
+        // 🚀 2A. Adım: Cari (Firma) ödemesi siliniyorsa ters işlem yap
+        if (ilgiliId && (kategori === 'Cari' || kategori === 'Firma')) {
+            const cariHesap = await Cari.findById(ilgiliId);
+            if (cariHesap) {
+                // Firmadan para almıştık (Gelir), silince borcu tekrar artar
+                if (islemYonu === 'Gelir') cariHesap.bakiye = (cariHesap.bakiye || 0) + tutar;
+                // Firmaya para vermiştik (Gider), silince borcu tekrar azalır
+                if (islemYonu === 'Gider') cariHesap.bakiye = (cariHesap.bakiye || 0) - tutar;
+                await cariHesap.save();
+            }
+        }
+
+        // 🚀 2B. Adım: Personel ödemesi siliniyorsa ters işlem yap
+        else if (ilgiliId && (kategori === 'Personel' || kategori === 'Maaş' || kategori === 'Avans')) {
+            const isci = await Personel.findById(ilgiliId);
+            if (isci) {
+                // İşçiye para ödemiştik (Gider), silince alacağı tekrar artar
+                if (islemYonu === 'Gider') isci.bakiye = (isci.bakiye || 0) + tutar;
+                // İşçi avansı geri getirmişti (Gelir), silince alacağı tekrar azalır
+                if (islemYonu === 'Gelir') isci.bakiye = (isci.bakiye || 0) - tutar;
+                await isci.save();
+
+                // İşçinin hareket ekstresindeki o makbuzu da çaktırmadan siliyoruz
+                if (typeof PersonelHareket !== 'undefined') {
+                    await PersonelHareket.findOneAndDelete({
+                        personelId: isci._id, tutar: tutar, islemTipi: { $in: ['Ödeme', 'Avans', 'Avans İadesi'] }
+                    }).sort({ islemTarihi: -1 });
+                }
+            }
+        }
+
+        // 3. Adım: İşlemi kasadan tamamen sil
+        await Odeme.findByIdAndDelete(id);
         res.status(204).send();
     } catch (hata) {
         res.status(400).json({ mesaj: "İşlem silinemedi", detay: hata.message });

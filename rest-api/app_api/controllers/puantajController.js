@@ -221,29 +221,70 @@ const puantajYukle = (req, res) => {
             }
 
             for (const pId in islenenPersoneller) {
-                const data = islenenPersoneller[pId];
-                const p = data.personel;
-                const hakedisNum = Math.round(Number(data.toplamHakedis) || 0);
+                // ... (Yukarıdaki excel okuma kodları aynı kalıyor) ...
 
-                p.bakiye = (p.bakiye || 0) + hakedisNum;
-                await p.save();
+                let zatenEklenenler = []; // 🚀 YENİ: Çift eklenenleri tutacağız
 
-                let islemTarihiMetni = data.tarihler[0];
-                if (data.tarihler.length > 1) {
-                    let ilkTarih = data.tarihler[0];
-                    let sonTarih = data.tarihler[data.tarihler.length - 1];
-                    if (ilkTarih !== sonTarih) islemTarihiMetni = `${ilkTarih} ile ${sonTarih}`;
-                }
+                for (const pId in islenenPersoneller) {
+                    const data = islenenPersoneller[pId];
+                    const p = data.personel;
+                    const hakedisNum = Math.round(Number(data.toplamHakedis) || 0);
+                    const netGun = Number(data.toplamGun.toFixed(2));
 
-                const netGun = Number(data.toplamGun.toFixed(2));
+                    let islemTarihiMetni = data.tarihler[0];
+                    if (data.tarihler.length > 1) {
+                        let ilkTarih = data.tarihler[0];
+                        let sonTarih = data.tarihler[data.tarihler.length - 1];
+                        if (ilkTarih !== sonTarih) islemTarihiMetni = `${ilkTarih} ile ${sonTarih}`;
+                    }
 
-                if (PersonelHareket) {
-                    await PersonelHareket.create({
-                        personelId: p._id,
-                        islemTipi: 'Hakediş',
-                        tutar: hakedisNum,
-                        bakiyeSonrasi: p.bakiye,
-                        aciklama: `${islemTarihiMetni} Tarihleri Arası: Toplam ${netGun} Günlük Çalışma`
+                    const beklenenAciklama = `${islemTarihiMetni} Tarihleri Arası: Toplam ${netGun} Günlük Çalışma`;
+
+                    // 🚀 ZIRH DEVREDE: Bu işçiye, bu tarihlerde, bu açıklamayla zaten hakediş girilmiş mi?
+                    let mukerrerKayit = false;
+                    if (PersonelHareket) {
+                        const oncekiKayit = await PersonelHareket.findOne({
+                            personelId: p._id,
+                            aciklama: beklenenAciklama,
+                            islemTipi: 'Hakediş'
+                        });
+                        if (oncekiKayit) mukerrerKayit = true;
+                    }
+
+                    if (mukerrerKayit) {
+                        // İşçinin bakiyesini şişirme, sadece rapora ekle
+                        zatenEklenenler.push({
+                            isim: p.adSoyad,
+                            mesaj: `${islemTarihiMetni} tarihleri sistemde ZATEN KAYITLI. Çift maaş yazılmadı!`
+                        });
+                        continue; // 🚀 İşlemi pas geç ve diğer işçiye atla!
+                    }
+
+                    // EĞER TEMİZSE NORMAL KAYIT İŞLEMİNE DEVAM ET
+                    p.bakiye = (p.bakiye || 0) + hakedisNum;
+                    await p.save();
+
+                    if (PersonelHareket) {
+                        await PersonelHareket.create({
+                            personelId: p._id,
+                            islemTipi: 'Hakediş',
+                            tutar: hakedisNum,
+                            bakiyeSonrasi: p.bakiye,
+                            aciklama: beklenenAciklama
+                        });
+
+                        basariliTahakkuklar.push({ isim: p.adSoyad, tahakkukTutar: hakedisNum, gun: netGun.toString(), yeniBakiye: p.bakiye });
+                    }
+
+                    // 🚀 Rapor ekranına mükerrer (çift) kayıtları da gönderiyoruz
+                    res.status(200).json({
+                        mesaj: "Toplu puantaj işlemi tamamlandı.",
+                        ozet: {
+                            basariliTahakkuklar,
+                            sistemdeBulunamayanlar: Object.values(bulunamayanlarMap),
+                            eksikBasimlar,
+                            zatenEklenenler // Frontend'e bu listeyi de gönderdik
+                        }
                     });
                 }
 

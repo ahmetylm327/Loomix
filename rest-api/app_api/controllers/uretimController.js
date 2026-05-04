@@ -75,8 +75,21 @@ const uretimGuncelle = async (req, res) => {
 const uretimSil = async (req, res) => {
     try {
         const id = req.params.id;
-        const silinenUretim = await Uretim.findByIdAndDelete(id);
-        if (!silinenUretim) return res.status(404).json({ mesaj: "Üretim kaydı bulunamadı." });
+
+        // 🚀 1. Adım: Silinmeden önce fişi bul ve kime kesildiğine bak
+        const silinecekUretim = await Uretim.findById(id);
+        if (!silinecekUretim) return res.status(404).json({ mesaj: "Üretim kaydı bulunamadı." });
+
+        // 🚀 2. Adım: Kutsal İade! Fiş kime kesildiyse git borcundan düş.
+        const cari = await Cari.findById(silinecekUretim.cariId);
+        if (cari) {
+            const iptalTutari = silinecekUretim.quantity * (silinecekUretim.birimFiyat || 0);
+            cari.bakiye = (cari.bakiye || 0) - iptalTutari;
+            await cari.save();
+        }
+
+        // 3. Adım: Fişi kalıcı olarak sil
+        await Uretim.findByIdAndDelete(id);
         res.status(204).send();
     } catch (hata) {
         res.status(400).json({ mesaj: "Üretim silinemedi", detay: hata.message });
