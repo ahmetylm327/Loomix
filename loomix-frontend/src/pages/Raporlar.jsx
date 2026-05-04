@@ -48,9 +48,9 @@ const Raporlar = () => {
         }
     };
 
-    // MİKRO MANTIĞI: Gelen veriyi Borç/Alacak olarak ayıran fonksiyonlar
+    // 🚀 MİKRO MANTIĞI: Borç/Alacak Kontrolleri
     const isBorc = (islemTipi) => islemTipi === 'Ödeme' || islemTipi === 'Avans';
-    const isAlacak = (islemTipi) => islemTipi === 'Hakediş' || islemTipi === 'Avans İadesi';
+    const isAlacak = (islemTipi) => islemTipi === 'Hakediş' || islemTipi === 'Avans İadesi' || islemTipi === 'Prim';
 
     const ekstreColumns = [
         {
@@ -84,11 +84,11 @@ const Raporlar = () => {
             render: (val, record) => isAlacak(record.islemTipi) ? <Text type="success">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-'
         },
         {
-            title: 'Bakiye',
+            title: 'Yürüyen Bakiye',
             dataIndex: 'bakiyeSonrasi',
             align: 'right',
             width: 120,
-            render: val => <b>{Number(val || 0).toLocaleString('tr-TR')} ₺</b>
+            render: val => <b style={{ color: val < 0 ? '#3f8600' : (val > 0 ? '#cf1322' : '#000') }}>{Number(val || 0).toLocaleString('tr-TR')} ₺</b>
         },
     ];
 
@@ -265,7 +265,6 @@ const Raporlar = () => {
                     size="small"
                     bordered
                     style={{ marginTop: 15 }}
-                    // 🚀 İŞTE MÜŞTERİNİN İSTEDİĞİ EN ALTTAKİ GENEL TOPLAM SATIRI BURASI!
                     summary={() => {
                         let totalBorc = 0;
                         let totalAlacak = 0;
@@ -289,7 +288,6 @@ const Raporlar = () => {
                                     <Text type="success">{totalAlacak.toLocaleString('tr-TR')} ₺</Text>
                                 </Table.Summary.Cell>
                                 <Table.Summary.Cell index={3} align="right">
-                                    {/* Bakiye eksi ise yeşil, artı ise kırmızı (şirket borcu) yanacak */}
                                     <span style={{ color: netBakiye > 0 ? '#cf1322' : (netBakiye < 0 ? '#3f8600' : '#000') }}>
                                         {netBakiye.toLocaleString('tr-TR')} ₺
                                     </span>

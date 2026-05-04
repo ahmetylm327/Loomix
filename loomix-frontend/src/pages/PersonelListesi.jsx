@@ -27,7 +27,6 @@ const PersonelListesi = () => {
     const [tahakkukForm] = Form.useForm();
     const [tahakkukLoading, setTahakkukLoading] = useState(false);
 
-    // 🚀 YENİ: Avans İadesi Stateleri
     const [isRefundModalVisible, setIsRefundModalVisible] = useState(false);
     const [refundEmployee, setRefundEmployee] = useState(null);
     const [refundAmount, setRefundAmount] = useState(0);
@@ -129,7 +128,6 @@ const PersonelListesi = () => {
         }
     };
 
-    // 🚀 YENİ: Avans İadesi Fonksiyonu
     const handleRefund = async () => {
         if (!refundAmount || refundAmount <= 0) return message.warning("Lütfen geçerli bir tutar girin.");
         try {
@@ -148,7 +146,7 @@ const PersonelListesi = () => {
         setTahakkukLoading(true);
         try {
             const id = selectedPersonel.employeeId || selectedPersonel._id;
-            const res = await axiosInstance.post(`/payroll/${id}/calculate`, values);
+            await axiosInstance.post(`/payroll/${id}/calculate`, values);
             message.success(`Tahakkuk başarıyla eklendi!`);
             setIsTahakkukModalVisible(false);
             tahakkukForm.resetFields();
@@ -205,50 +203,58 @@ const PersonelListesi = () => {
         }
     };
 
+    // 🚀 MİKRO MANTIĞI: Raporlar sayfasındaki aynı standart eklendi!
+    const isBorc = (islemTipi) => islemTipi === 'Ödeme' || islemTipi === 'Avans';
+    const isAlacak = (islemTipi) => islemTipi === 'Hakediş' || islemTipi === 'Avans İadesi' || islemTipi === 'Prim';
+
     const exportToExcel = () => {
         if (ekstreData.length === 0) return message.warning("Veri yok!");
-        const formattedData = ekstreData.map(item => ({
-            'Tarih': dayjs(item.islemTarihi).format('DD.MM.YYYY HH:mm'),
-            'İşlem Tipi': item.islemTipi,
-            'Açıklama': item.aciklama || '-',
-            'Tutar (₺)': item.tutar,
-            'Kalan Bakiye (₺)': item.bakiyeSonrasi || '-'
+        const excelData = ekstreData.map(item => ({
+            "Tarih": dayjs(item.islemTarihi).format('DD.MM.YYYY HH:mm'),
+            "Evrak Cinsi": item.islemTipi === 'Hakediş' ? 'Personel Tahakkuku' : (item.islemTipi === 'Ödeme' ? 'Kasa Tediye Fişi' : item.islemTipi),
+            "Açıklama": item.aciklama || '-',
+            "TL Borç": isBorc(item.islemTipi) ? Math.abs(item.tutar) : 0,
+            "TL Alacak": isAlacak(item.islemTipi) ? Math.abs(item.tutar) : 0,
+            "Bakiye": item.bakiyeSonrasi || 0
         }));
-        const worksheet = XLSX.utils.json_to_sheet(formattedData);
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Ekstre");
-        XLSX.writeFile(workbook, `${ekstrePersonel.adSoyad || ekstrePersonel.fullname}_Ekstre.xlsx`);
+        XLSX.writeFile(workbook, `${ekstrePersonel?.adSoyad || ekstrePersonel?.fullname}_Ekstre.xlsx`);
     };
 
     const exportToPDF = () => {
-        if (ekstreData.length === 0) return message.warning("Veri yok!");
-        const doc = new jsPDF();
-        const isim = ekstrePersonel.adSoyad || ekstrePersonel.fullname;
+        if (!ekstreData || ekstreData.length === 0) return message.warning("Veri yok!");
+        const doc = new jsPDF('p', 'pt', 'a4');
+        const isim = ekstrePersonel?.adSoyad || ekstrePersonel?.fullname;
 
-        doc.setFontSize(18);
-        doc.text("LOOMIX ERP - Personel Ekstresi", 14, 22);
-        doc.setFontSize(12);
-        doc.text(`Personel: ${isim}`, 14, 32);
-        doc.text(`Tarih: ${dayjs().format('DD.MM.YYYY')}`, 14, 40);
+        doc.setFontSize(14);
+        doc.text(`${isim} - Cari Hesap Ekstresi`, 40, 40);
+        doc.setFontSize(10);
+        doc.text(`Tarih: ${dayjs().format('DD.MM.YYYY')}`, 40, 55);
 
-        const tableColumn = ["Tarih", "Islem Tipi", "Aciklama", "Tutar (TL)", "Bakiye (TL)"];
+        const tableColumn = ["Tarih", "Evrak Cinsi", "Aciklama", "Borc (TL)", "Alacak (TL)", "Bakiye"];
         const tableRows = ekstreData.map(item => [
             dayjs(item.islemTarihi).format('DD.MM.YYYY'),
-            item.islemTipi,
+            item.islemTipi === 'Hakediş' ? 'Tahakkuk' : item.islemTipi,
             item.aciklama || '-',
-            item.tutar.toString(),
-            (item.bakiyeSonrasi || 0).toString()
+            isBorc(item.islemTipi) ? Math.abs(item.tutar).toLocaleString('tr-TR') : '-',
+            isAlacak(item.islemTipi) ? Math.abs(item.tutar).toLocaleString('tr-TR') : '-',
+            Number(item.bakiyeSonrasi || 0).toLocaleString('tr-TR')
         ]);
 
-        autoTable(doc, { head: [tableColumn], body: tableRows, startY: 50, theme: 'striped', headStyles: { fillColor: [29, 53, 87] } });
+        autoTable(doc, { head: [tableColumn], body: tableRows, startY: 70, theme: 'grid', headStyles: { fillColor: [89, 89, 89] }, styles: { fontSize: 8 } });
         doc.save(`${isim}_Ekstre.pdf`);
     };
 
+    // 🚀 YENİ: Raporlar sayfasındaki detaylı Ekstre tablosunun birebir aynısı!
     const ekstreColumns = [
-        { title: 'Tarih', dataIndex: 'islemTarihi', render: (val) => dayjs(val).format('DD.MM.YYYY') },
-        { title: 'İşlem', dataIndex: 'islemTipi', render: (val) => <Tag color={val === 'Ödeme' ? 'red' : (val === 'Avans İadesi' ? 'blue' : 'green')}>{val}</Tag> },
-        { title: 'Tutar', dataIndex: 'tutar', render: (val) => <b style={{ color: val < 0 ? '#cf1322' : '#3f8600' }}>{val} ₺</b> },
+        { title: 'Tarih', dataIndex: 'islemTarihi', width: 130, render: val => dayjs(val).format('DD.MM.YYYY HH:mm') },
+        { title: 'Evrak Cinsi', dataIndex: 'islemTipi', width: 150, render: val => <b>{val === 'Hakediş' ? 'Personel Tahakkuku' : (val === 'Ödeme' ? 'Kasa Tediye Fişi' : val)}</b> },
         { title: 'Açıklama', dataIndex: 'aciklama' },
+        { title: 'TL Borç (Ödenen)', dataIndex: 'tutar', align: 'right', width: 120, render: (val, record) => isBorc(record.islemTipi) ? <Text type="danger">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
+        { title: 'TL Alacak (Hakediş)', dataIndex: 'tutar', align: 'right', width: 120, render: (val, record) => isAlacak(record.islemTipi) ? <Text type="success">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
+        { title: 'Yürüyen Bakiye', dataIndex: 'bakiyeSonrasi', align: 'right', width: 120, render: val => <b style={{ color: val < 0 ? '#3f8600' : (val > 0 ? '#cf1322' : '#000') }}>{Number(val || 0).toLocaleString('tr-TR')} ₺</b> },
     ];
 
     const columns = [
@@ -271,7 +277,6 @@ const PersonelListesi = () => {
                 const tip = record.ucretTipi || (record.wage_type === 'Hourly' ? 'Saatlik' : 'Günlük');
                 const tipColor = tip === 'Saatlik' ? 'purple' : 'cyan';
 
-                // 🚀 YENİ: Mikro Mantığı Borç/Alacak Görünümü
                 let bakiyeEtiket;
                 if (bakiye > 0) {
                     bakiyeEtiket = <Tag color="error" style={{ fontSize: '13px', padding: '2px 8px' }}>Bizden Alacaklı: {bakiye} ₺</Tag>;
@@ -386,7 +391,6 @@ const PersonelListesi = () => {
                 </Form>
             </Modal>
 
-            {/* 💸 ÖDEME YAPMA MODALI (Şirketten Çıkan Para) */}
             <Modal title={<><WalletOutlined style={{ color: '#cf1322' }} /> Personele Ödeme Yap</>} open={isPayModalVisible} onCancel={() => setIsPayModalVisible(false)} onOk={handlePayment} okText="Ödemeyi Tamamla" cancelText="Vazgeç" okButtonProps={{ danger: true }} destroyOnHidden>
                 {payEmployee && (
                     <div style={{ textAlign: 'center', padding: '15px 0' }}>
@@ -399,7 +403,6 @@ const PersonelListesi = () => {
                 )}
             </Modal>
 
-            {/* ♻️ AVANS İADESİ MODALI (Şirkete Giren Para) */}
             <Modal title={<><RollbackOutlined style={{ color: '#52c41a' }} /> Avans İadesi Al / Tahsilat</>} open={isRefundModalVisible} onCancel={() => setIsRefundModalVisible(false)} onOk={handleRefund} okText="Tahsilatı Kaydet" cancelText="Vazgeç" okButtonProps={{ style: { background: '#52c41a', borderColor: '#52c41a' } }} destroyOnHidden>
                 {refundEmployee && (
                     <div style={{ textAlign: 'center', padding: '15px 0' }}>
@@ -430,12 +433,63 @@ const PersonelListesi = () => {
                 </Form>
             </Modal>
 
-            <Modal title={`${ekstrePersonel?.adSoyad || ekstrePersonel?.fullname} - Hesap Ekstresi`} open={isEkstreVisible} onCancel={() => setIsEkstreVisible(false)} footer={null} width={700} destroyOnHidden>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '15px' }}>
-                    <Button icon={<FileExcelOutlined />} onClick={exportToExcel} style={{ color: '#52c41a', borderColor: '#52c41a' }}>Excel İndir</Button>
-                    <Button type="primary" danger icon={<FilePdfOutlined />} onClick={exportToPDF}>PDF İndir</Button>
-                </div>
-                <Table columns={ekstreColumns} dataSource={ekstreData} rowKey="_id" loading={ekstreLoading} pagination={{ pageSize: 8 }} size="small" />
+            {/* 🚀 YENİ: Raporlar sayfasındaki Ekstrenin BİREBİR AYNISI */}
+            <Modal
+                title={
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: 30 }}>
+                        <span>{ekstrePersonel?.adSoyad || ekstrePersonel?.fullname} - Detaylı Hesap Ekstresi</span>
+                        <Space>
+                            <Button size="small" icon={<FileExcelOutlined />} style={{ color: '#52c41a', borderColor: '#52c41a' }} onClick={exportToExcel}>Excel</Button>
+                            <Button size="small" type="primary" danger icon={<FilePdfOutlined />} onClick={exportToPDF}>PDF</Button>
+                        </Space>
+                    </div>
+                }
+                open={isEkstreVisible}
+                onCancel={() => setIsEkstreVisible(false)}
+                footer={null}
+                width={900}
+                destroyOnHidden
+            >
+                <Table
+                    columns={ekstreColumns}
+                    dataSource={ekstreData}
+                    rowKey="_id"
+                    loading={ekstreLoading}
+                    pagination={{ pageSize: 12 }}
+                    size="small"
+                    bordered
+                    style={{ marginTop: 15 }}
+                    summary={() => {
+                        let totalBorc = 0;
+                        let totalAlacak = 0;
+
+                        ekstreData.forEach(({ islemTipi, tutar }) => {
+                            if (isBorc(islemTipi)) totalBorc += Math.abs(tutar);
+                            if (isAlacak(islemTipi)) totalAlacak += Math.abs(tutar);
+                        });
+
+                        const netBakiye = totalAlacak - totalBorc;
+
+                        return (
+                            <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold', fontSize: '14px' }}>
+                                <Table.Summary.Cell index={0} colSpan={3} align="right">
+                                    GENEL TOPLAM:
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={1} align="right">
+                                    <Text type="danger">{totalBorc.toLocaleString('tr-TR')} ₺</Text>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={2} align="right">
+                                    <Text type="success">{totalAlacak.toLocaleString('tr-TR')} ₺</Text>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={3} align="right">
+                                    <span style={{ color: netBakiye > 0 ? '#cf1322' : (netBakiye < 0 ? '#3f8600' : '#000') }}>
+                                        {netBakiye.toLocaleString('tr-TR')} ₺
+                                    </span>
+                                </Table.Summary.Cell>
+                            </Table.Summary.Row>
+                        );
+                    }}
+                />
             </Modal>
         </div>
     );

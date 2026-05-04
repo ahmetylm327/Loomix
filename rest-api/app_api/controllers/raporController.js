@@ -7,31 +7,26 @@ const gelismisBordroRaporu = async (req, res) => {
         const personeller = await Personel.find({ aktifMi: true }).sort({ adSoyad: 1 });
 
         const detayliListe = await Promise.all(personeller.map(async (p) => {
-            // Bu personelin tüm geçmiş hareketlerini çek
             const hareketler = await PersonelHareket.find({ personelId: p._id });
 
-            // 🧮 Müşterinin istediği 3 ana kalem:
-
-            // 1. Toplam Borçlandığımız (İşçinin Hakedişleri)
+            // 🚀 DÜZELTME: Sadece isimlere değil, tüm mutlak (abs) değerlere göre kusursuz toplama
             const toplamHakedis = hareketler
-                .filter(h => h.islemTipi === 'Hakediş' || h.islemTipi === 'Avans İadesi')
-                .reduce((acc, curr) => acc + curr.tutar, 0);
+                .filter(h => h.islemTipi === 'Hakediş' || h.islemTipi === 'Avans İadesi' || h.islemTipi === 'Prim')
+                .reduce((acc, curr) => acc + Math.abs(curr.tutar), 0);
 
-            // 2. Toplam Ödediğimiz (İşçinin Aldığı Para)
             const toplamOdenen = hareketler
                 .filter(h => h.islemTipi === 'Ödeme' || h.islemTipi === 'Avans')
                 .reduce((acc, curr) => acc + Math.abs(curr.tutar), 0);
 
-            // 3. Kalan Sonuç (Bakiye)
             const bakiye = p.bakiye || 0;
 
             return {
                 id: p._id,
                 adSoyad: p.adSoyad,
                 departman: p.departman || 'Genel',
-                toplamHakedis, // Borçlandığımız
-                toplamOdenen,  // Ödediğimiz
-                bakiye         // Sonuç
+                toplamHakedis,
+                toplamOdenen,
+                bakiye
             };
         }));
 

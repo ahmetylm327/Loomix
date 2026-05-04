@@ -3,17 +3,14 @@ const Personel = mongoose.model('Personel');
 const Odeme = mongoose.model('Odeme');
 
 let PersonelHareket;
-try {
-    PersonelHareket = mongoose.model('PersonelHareket');
-} catch (error) {
-    console.warn("Uyarı: PersonelHareket modeli henüz oluşturulmamış.");
-}
+try { PersonelHareket = mongoose.model('PersonelHareket'); }
+catch (error) { console.warn("Uyarı: PersonelHareket modeli henüz oluşturulmamış."); }
 
 const personelEkle = async (req, res) => {
     try {
         const dbData = {
             adSoyad: req.body.adSoyad || req.body.fullname,
-            ucretTipi: req.body.ucretTipi || 'Günlük', // Artık doğrudan Saatlik/Günlük alıyoruz
+            ucretTipi: req.body.ucretTipi || 'Günlük',
             ucretMiktari: Number(req.body.ucretMiktari || 0),
             pozisyon: req.body.pozisyon || req.body.position,
             telefon: req.body.telefon || req.body.phoneNumber,
@@ -86,7 +83,7 @@ const personelOdemeYap = async (req, res) => {
             await PersonelHareket.create({
                 personelId: employeeId,
                 islemTipi: 'Ödeme',
-                tutar: -tutar,
+                tutar: Math.abs(tutar), // 🚀 DÜZELTME: Kasa mantığıyla aynı olması için pozitif kaydediyoruz
                 bakiyeSonrasi: personel.bakiye,
                 aciklama: req.body.notlar || 'Manuel Avans/Maaş Ödemesi'
             });
@@ -95,7 +92,7 @@ const personelOdemeYap = async (req, res) => {
         await Odeme.create({
             islemYonu: 'Gider',
             odemeTipi: 'Nakit/Banka',
-            tutar: tutar,
+            tutar: Math.abs(tutar),
             kategori: 'Personel Ödemesi',
             ilgiliId: employeeId,
             odemeTarihi: new Date(),
@@ -128,7 +125,7 @@ const topluMaasOde = async (req, res) => {
                     await PersonelHareket.create({
                         personelId: id,
                         islemTipi: 'Ödeme',
-                        tutar: -odenenTutar,
+                        tutar: Math.abs(odenenTutar), // 🚀 DÜZELTME: Pozitif kaydediyoruz
                         bakiyeSonrasi: 0,
                         aciklama: notlar || 'Toplu Maaş Kapatması'
                     });
@@ -158,7 +155,9 @@ const getPersonelEkstre = async (req, res) => {
     const { employeeId } = req.params;
     try {
         if (!PersonelHareket) return res.status(500).json({ mesaj: "Hareket tablosu bulunamadı." });
-        const hareketler = await PersonelHareket.find({ personelId: employeeId }).sort({ islemTarihi: -1 });
+
+        // 🚀 DÜZELTME: Sıralama 1 yapıldı (Eskiden Yeniye / Kronolojik). Banka defteri gibi akar!
+        const hareketler = await PersonelHareket.find({ personelId: employeeId }).sort({ islemTarihi: 1 });
         res.status(200).json(hareketler);
     } catch (error) {
         res.status(500).json({ mesaj: "Ekstre çekilemedi", detay: error.message });
@@ -174,7 +173,6 @@ const personelTahsilatYap = async (req, res) => {
         if (!personel) return res.status(404).json({ mesaj: "Personel bulunamadı" });
         if (tutar <= 0) return res.status(400).json({ mesaj: "Geçerli bir tutar girin." });
 
-        // İşçi parayı iade ettiği için bakiyesi (alacağı) tekrar artı yönde hareket eder
         personel.bakiye = (personel.bakiye || 0) + tutar;
         await personel.save();
 
@@ -182,17 +180,16 @@ const personelTahsilatYap = async (req, res) => {
             await PersonelHareket.create({
                 personelId: employeeId,
                 islemTipi: 'Avans İadesi',
-                tutar: tutar, // Pozitif yansır
+                tutar: Math.abs(tutar),
                 bakiyeSonrasi: personel.bakiye,
                 aciklama: req.body.notlar || 'Personelden Nakit Avans İadesi Alındı'
             });
         }
 
-        // KASAYA PARA GİRİYOR (Gelir İşlemi)
         await Odeme.create({
             islemYonu: 'Gelir',
             odemeTipi: 'Nakit/Banka',
-            tutar: tutar,
+            tutar: Math.abs(tutar),
             kategori: 'Avans İadesi',
             ilgiliId: employeeId,
             odemeTarihi: new Date(),
