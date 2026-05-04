@@ -1,7 +1,6 @@
 const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
-const dayjs = require('dayjs'); // Added dayjs for robust date parsing
 
 let Personel;
 try { Personel = mongoose.model('Personel'); }
@@ -58,26 +57,23 @@ const excelTarihCevir = (val) => {
     return val.toString();
 };
 
-// YENİ: Verilen tarihin Cumartesi olup olmadığını kontrol eder
+// 🚀 YENİ: Tarihin Cumartesi olup olmadığını kesin olarak tespit eden dedektif
 const isCumartesi = (val) => {
     if (!val) return false;
     let dateObj;
     if (typeof val === 'number') {
         dateObj = new Date((val - 25569) * 86400 * 1000);
     } else {
-        // Simple string parsing, assuming DD.MM.YYYY or similar common formats
-        // This is a basic check. For very robust parsing across many formats, consider using dayjs or moment here too.
         const parts = val.toString().split(/[./-]/);
         if (parts.length === 3) {
-            // Attempt to parse DD MM YYYY
+            // Türkiye standartı: DD.MM.YYYY
             dateObj = new Date(parts[2], parts[1] - 1, parts[0]);
         } else {
             dateObj = new Date(val);
         }
     }
-    return dateObj.getDay() === 6; // 0 is Sunday, 6 is Saturday
+    return dateObj.getDay() === 6; // 6 = Cumartesi
 };
-
 
 const puantajYukle = (req, res) => {
     upload(req, res, async (err) => {
@@ -88,18 +84,16 @@ const puantajYukle = (req, res) => {
             let settings;
             if (Setting) settings = await Setting.findOne({ key: 'mesai_ayarlari' });
 
-            // 🚀 YENİ: Varsayılan ayarlara 'cumartesiHedef' eklendi (varsayılan 5 saat)
-            if (!settings) settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15, cumartesiHedef: 5 } };
+            // 🚀 YENİ: Sadece Saat değil, Cumartesi için net Başlangıç ve Bitiş sınırı koyduk!
+            if (!settings) settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15, ctesiBaslangic: "08:00", ctesiBitis: "13:00" } };
 
-            const { baslangic, bitis, molaBas, molaBit, tolerans, cumartesiHedef } = settings.value;
-            const ctesiHedefSaat = cumartesiHedef || 5;
+            const { baslangic, bitis, molaBas, molaBit, tolerans, ctesiBaslangic = "08:00", ctesiBitis = "13:00" } = settings.value;
 
             const mesaiBaslangicDakika = timeToMinutes(baslangic);
             const mesaiBitisDakika = timeToMinutes(bitis);
             const molaBasDakika = timeToMinutes(molaBas);
             const molaBitDakika = timeToMinutes(molaBit);
             const molaSure = molaBitDakika - molaBasDakika;
-            const standartGunlukSaat = (mesaiBitisDakika - mesaiBaslangicDakika - molaSure) / 60;
 
             const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
@@ -133,6 +127,7 @@ const puantajYukle = (req, res) => {
 
                 const aranacakIsim = satir.AdSoyad.toString().trim();
                 const satirTarihi = excelTarihCevir(satir.Tarih);
+                const buCumartesiMi = isCumartesi(satir.Tarih); // O gün cumartesi mi?
 
                 const personel = await Personel.findOne({
                     adSoyad: { $regex: new RegExp('^' + aranacakIsim + '$', 'i') },
@@ -160,32 +155,42 @@ const puantajYukle = (req, res) => {
                         const gercekCikis = timeToMinutes(satir.CikisSaati);
 
                         if (gercekGiris > 0 && gercekCikis > gercekGiris) {
+
+                            // 🚀 YENİ MANTIK: Bugün Cumartesiyse sınırları ona göre çiz, Hafta içiyse normal sınır çiz.
+                            const aktifBaslangic = buCumartesiMi ? timeToMinutes(ctesiBaslangic) : mesaiBaslangicDakika;
+                            const aktifBitis = buCumartesiMi ? timeToMinutes(ctesiBitis) : mesaiBitisDakika;
+
                             let islemGorecekGiris = gercekGiris;
                             let islemGorecekCikis = gercekCikis;
 
-                            if (gercekGiris < mesaiBaslangicDakika) islemGorecekGiris = mesaiBaslangicDakika;
+                            // ERKEN GELENE PARA YOK (Cumartesi 08:00'den önce gelse bile 08:00 sayılır)
+                            if (gercekGiris < aktifBaslangic) islemGorecekGiris = aktifBaslangic;
                             else {
-                                const gecikmeSuresi = gercekGiris - mesaiBaslangicDakika;
-                                if (gecikmeSuresi <= (tolerans || 0)) islemGorecekGiris = mesaiBaslangicDakika;
+                                // GEÇ KALANA KESİNTİ VAR (Toleransı geçerse saati kısaltır)
+                                const gecikmeSuresi = gercekGiris - aktifBaslangic;
+                                if (gecikmeSuresi <= (tolerans || 0)) islemGorecekGiris = aktifBaslangic;
                             }
 
-                            if (gercekCikis > mesaiBitisDakika) islemGorecekCikis = mesaiBitisDakika;
+                            // GEÇ ÇIKANA PARA YOK (Cumartesi 13:00'ten sonra kalsa bile 13:00 sayılır)
+                            if (gercekCikis > aktifBitis) islemGorecekCikis = aktifBitis;
 
                             let toplamDakika = islemGorecekCikis - islemGorecekGiris;
 
                             if (toplamDakika > 0) {
-                                // Mola hesaplaması
+                                // Sadece mola saati iş süresine denk gelirse molayı düş (Örn: Cumartesi 13:00'te bitiyorsa 12:30 molası düşülür)
                                 if (islemGorecekGiris <= molaBasDakika && islemGorecekCikis >= molaBitDakika) {
                                     toplamDakika -= molaSure;
                                 }
 
                                 const calismaSaati = toplamDakika / 60;
 
-                                // 🚀 YENİ: Cumartesi kontrolü ve katsayı hesaplaması
-                                const buCumartesiMi = isCumartesi(satir.Tarih);
-                                const hedefSaat = buCumartesiMi ? ctesiHedefSaat : standartGunlukSaat;
+                                // O günkü hedeflenen net saati bul (Mola varsa düşülmüş haliyle)
+                                let gunlukHedefDakika = aktifBitis - aktifBaslangic;
+                                if (aktifBaslangic <= molaBasDakika && aktifBitis >= molaBitDakika) gunlukHedefDakika -= molaSure;
+                                const gunlukHedefSaat = gunlukHedefDakika / 60;
 
-                                gunKatsayi = calismaSaati / hedefSaat;
+                                // İşçinin çalışma oranını o günün hedefine bölüyoruz
+                                gunKatsayi = calismaSaati / gunlukHedefSaat;
 
                                 if (gunKatsayi > 1) gunKatsayi = 1;
 
@@ -200,25 +205,18 @@ const puantajYukle = (req, res) => {
 
                     if (islemGecerli && gunlukHakedis > 0) {
                         if (!islenenPersoneller[personel._id]) {
-                            islenenPersoneller[personel._id] = {
-                                personel: personel,
-                                toplamHakedis: 0,
-                                toplamGun: 0,
-                                tarihler: []
-                            };
+                            islenenPersoneller[personel._id] = { personel: personel, toplamHakedis: 0, toplamGun: 0, tarihler: [] };
                         }
-
                         islenenPersoneller[personel._id].toplamHakedis += gunlukHakedis;
                         islenenPersoneller[personel._id].toplamGun += gunKatsayi;
                         islenenPersoneller[personel._id].tarihler.push(satirTarihi);
-
                     } else {
                         eksikBasimlar.push({
                             isim: aranacakIsim,
                             tarih: satirTarihi,
                             giris: satir.GirisSaati || '-',
                             cikis: satir.CikisSaati || '-',
-                            mesaj: "Saat yetersiz, basım eksik veya maaş 0 TL."
+                            mesaj: "Saat sınırların dışında kaldı veya maaş 0 TL."
                         });
                     }
                 } else {
@@ -239,9 +237,7 @@ const puantajYukle = (req, res) => {
                 if (data.tarihler.length > 1) {
                     let ilkTarih = data.tarihler[0];
                     let sonTarih = data.tarihler[data.tarihler.length - 1];
-                    if (ilkTarih !== sonTarih) {
-                        islemTarihiMetni = `${ilkTarih} ile ${sonTarih}`;
-                    }
+                    if (ilkTarih !== sonTarih) islemTarihiMetni = `${ilkTarih} ile ${sonTarih}`;
                 }
 
                 const netGun = Number(data.toplamGun.toFixed(2));
@@ -256,12 +252,7 @@ const puantajYukle = (req, res) => {
                     });
                 }
 
-                basariliTahakkuklar.push({
-                    isim: p.adSoyad,
-                    tahakkukTutar: hakedisNum,
-                    gun: netGun.toString(),
-                    yeniBakiye: p.bakiye
-                });
+                basariliTahakkuklar.push({ isim: p.adSoyad, tahakkukTutar: hakedisNum, gun: netGun.toString(), yeniBakiye: p.bakiye });
             }
 
             res.status(200).json({
@@ -287,8 +278,7 @@ const ayarlarıGetir = async (req, res) => {
         let settings;
         if (Setting) settings = await Setting.findOne({ key: 'mesai_ayarlari' });
         if (settings) { res.status(200).json(settings.value); }
-        // 🚀 YENİ: GET isteğinde de cumartesiHedef'i gönderiyoruz
-        else { res.status(200).json({ baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15, cumartesiHedef: 5 }); }
+        else { res.status(200).json({ baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15, ctesiBaslangic: "08:00", ctesiBitis: "13:00" }); }
     } catch (e) { res.status(500).json({ mesaj: "Ayarlar çekilemedi" }); }
 };
 

@@ -16,15 +16,15 @@ const PuantajYukle = () => {
     const fetchSettings = async () => {
         try {
             const res = await axiosInstance.get('/attendance/settings');
-            // 🚀 YENİ: cumartesiHedef eklendi
-            const { baslangic, bitis, molaBas, molaBit, tolerans, cumartesiHedef } = res.data;
+            const { baslangic, bitis, molaBas, molaBit, tolerans, ctesiBaslangic, ctesiBitis } = res.data;
             settingsForm.setFieldsValue({
                 baslangic: dayjs(baslangic, 'HH:mm'),
                 bitis: dayjs(bitis, 'HH:mm'),
                 molaBas: dayjs(molaBas, 'HH:mm'),
                 molaBit: dayjs(molaBit, 'HH:mm'),
                 tolerans: tolerans || 15,
-                cumartesiHedef: cumartesiHedef || 5 // Varsayılan 5
+                ctesiBaslangic: dayjs(ctesiBaslangic || "08:00", 'HH:mm'),
+                ctesiBitis: dayjs(ctesiBitis || "13:00", 'HH:mm')
             });
         } catch (e) { console.log("Ayarlar çekilemedi."); }
     };
@@ -36,7 +36,8 @@ const PuantajYukle = () => {
             molaBas: values.molaBas.format('HH:mm'),
             molaBit: values.molaBit.format('HH:mm'),
             tolerans: values.tolerans,
-            cumartesiHedef: values.cumartesiHedef // 🚀 YENİ: Backend'e gönderiliyor
+            ctesiBaslangic: values.ctesiBaslangic.format('HH:mm'),
+            ctesiBitis: values.ctesiBitis.format('HH:mm')
         };
         try {
             await axiosInstance.post('/attendance/settings', payload);
@@ -52,10 +53,7 @@ const PuantajYukle = () => {
 
         try {
             const response = await axiosInstance.post('/attendance/upload', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    'Accept': 'application/json'
-                },
+                headers: { 'Content-Type': 'multipart/form-data', 'Accept': 'application/json' },
                 withCredentials: true
             });
             message.success(`${file.name} başarıyla işlendi!`);
@@ -158,30 +156,30 @@ const PuantajYukle = () => {
                 onCancel={() => setIsSettingsModalVisible(false)}
                 okText="Ayarları Kaydet"
                 cancelText="Vazgeç"
+                width={600}
             >
                 <Form form={settingsForm} layout="vertical" onFinish={handleSettingsSave}>
+                    <Divider orientation="left">Hafta İçi (Standart Mesai)</Divider>
                     <Row gutter={16}>
                         <Col span={12}><Form.Item name="baslangic" label="Mesai Başlangıç" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
                         <Col span={12}><Form.Item name="bitis" label="Mesai Bitiş" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
                     </Row>
+
+                    <Divider orientation="left" style={{ borderColor: '#1890ff', color: '#1890ff' }}>Hafta Sonu (Cumartesi Özel Mesaisi)</Divider>
                     <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item name="tolerans" label="Geç Kalma Toleransı (Dakika)" tooltip="Örn: 15 yazarsanız, 08:15'e kadar gelenlerden kesinti yapılmaz.">
-                                <InputNumber min={0} max={60} style={{ width: '100%' }} size="large" addonAfter="Dakika" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            {/* 🚀 YENİ: Cumartesi Hedef Saati Girişi */}
-                            <Form.Item name="cumartesiHedef" label="Cumartesi Tam Gün (Saat)" tooltip="Cumartesi günleri kaç saat çalışınca tam yevmiye hak edilir? (Genelde 5 saat)">
-                                <InputNumber min={1} max={12} style={{ width: '100%' }} size="large" addonAfter="Saat" />
-                            </Form.Item>
-                        </Col>
+                        <Col span={12}><Form.Item name="ctesiBaslangic" label="Cumartesi Başlangıç" tooltip="Cumartesi günü işin başladığı kesin saat." rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={12}><Form.Item name="ctesiBitis" label="Cumartesi Bitiş" tooltip="Cumartesi günü işin bittiği kesin saat. (Bu saati dolduran tam yevmiye alır)" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
                     </Row>
 
-                    <Divider>Mola Saatleri (Ücretten Düşülür)</Divider>
+                    <Divider orientation="left">Mola & Tolerans</Divider>
                     <Row gutter={16}>
-                        <Col span={12}><Form.Item name="molaBas" label="Mola Başlangıç" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
-                        <Col span={12}><Form.Item name="molaBit" label="Mola Bitiş" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="molaBas" label="Mola Başlangıç" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={8}><Form.Item name="molaBit" label="Mola Bitiş" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={8}>
+                            <Form.Item name="tolerans" label="Geç Kalma Toleransı">
+                                <InputNumber min={0} max={60} style={{ width: '100%' }} addonAfter="Dk" />
+                            </Form.Item>
+                        </Col>
                     </Row>
                 </Form>
             </Modal>
@@ -201,8 +199,8 @@ const PuantajYukle = () => {
                     </Row>
 
                     {(rapor.eksikBasimlar?.length || 0) > 0 && (
-                        <Card title={<><QuestionCircleOutlined style={{ color: '#cf1322' }} /> Eksik Kart Basanlar</>} style={{ marginBottom: 20, border: '1px solid #ffa39e' }} styles={{ body: { padding: 0 } }}>
-                            <Alert message="Bu personeller giriş veya çıkışta kart basmayı unuttuğu için bugünkü maaşları YATIRILMADI. Personel listesinden manuel düzeltme yapınız." type="error" banner />
+                        <Card title={<><QuestionCircleOutlined style={{ color: '#cf1322' }} /> Eksik Kart Basanlar / Sınır Dışı Kalanlar</>} style={{ marginBottom: 20, border: '1px solid #ffa39e' }} styles={{ body: { padding: 0 } }}>
+                            <Alert message="Bu personeller giriş/çıkış saatlerine uymadığı veya cihazda kart okutmadığı için sistem bu günü İŞLEMEDİ. Manuel düzeltiniz." type="error" banner />
                             <Table dataSource={rapor.eksikBasimlar || []} columns={eksikBasimSutunlar} rowKey={(r, i) => r.isim + i} pagination={{ pageSize: 5 }} size="small" />
                         </Card>
                     )}
