@@ -18,18 +18,18 @@ const { confirm } = Modal;
 const KasaDefteri = () => {
     const [data, setData] = useState([]);
     const [cariler, setCariler] = useState([]);
-    const [personeller, setPersoneller] = useState([]); // 🚀 YENİ: İşçi listesi eklendi
+    const [personeller, setPersoneller] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
     const [editingOdeme, setEditingOdeme] = useState(null);
     const [stats, setStats] = useState({ toplamGelir: 0, toplamGider: 0, netBakiye: 0 });
-    const [seciliKategori, setSeciliKategori] = useState(''); // 🚀 YENİ: Seçilen kategoriyi takip edeceğiz
+    const [seciliKategori, setSeciliKategori] = useState('');
 
     useEffect(() => {
         fetchData();
         fetchCariler();
-        fetchPersoneller(); // 🚀 Sayfa açıldığında personelleri de çeker
+        fetchPersoneller();
     }, []);
 
     const fetchData = async () => {
@@ -38,11 +38,15 @@ const KasaDefteri = () => {
             const response = await axiosInstance.get('/payments');
             let islemler = response.data;
 
-            // 🚀 ÇÖZÜM 1: TARİHE GÖRE KRONOLOJİK SIRALAMA (En yeni tarih en üstte)
+            // 🚀 MİLİSANİYELİK KUSURSUZ SIRALAMA
             islemler.sort((a, b) => {
-                const tarihA = dayjs(a.odemeTarihi || a.paymentDate).valueOf();
-                const tarihB = dayjs(b.odemeTarihi || b.paymentDate).valueOf();
-                return tarihB - tarihA;
+                const dateA = dayjs(a.odemeTarihi || a.paymentDate).valueOf();
+                const dateB = dayjs(b.odemeTarihi || b.paymentDate).valueOf();
+                if (dateB !== dateA) return dateB - dateA;
+
+                const idA = a._id || a.transactionId || "";
+                const idB = b._id || b.transactionId || "";
+                return idB.localeCompare(idA);
             });
 
             setData(islemler);
@@ -59,7 +63,9 @@ const KasaDefteri = () => {
             setStats({ toplamGelir: gelir, toplamGider: gider, netBakiye: gelir - gider });
         } catch (error) {
             message.error("Kasa hareketleri yüklenemedi!");
-        } finally { setLoading(false); }
+        } finally {
+            setLoading(false);
+        }
     };
 
     const fetchCariler = async () => {
@@ -71,11 +77,9 @@ const KasaDefteri = () => {
 
     const fetchPersoneller = async () => {
         try {
-            // Arka plandaki route ismine göre ikisinden birini dener
             let response;
             try { response = await axiosInstance.get('/employees'); }
             catch (e) { response = await axiosInstance.get('/personel'); }
-
             setPersoneller(response.data);
         } catch (error) { console.log("Personel listesi alınamadı."); }
     };
@@ -102,6 +106,7 @@ const KasaDefteri = () => {
                 await axiosInstance.post('/payments', payload);
                 message.success("İşlem kasaya başarıyla işlendi.");
             }
+
             setIsModalVisible(false);
             setEditingOdeme(null);
             setSeciliKategori('');
@@ -136,11 +141,19 @@ const KasaDefteri = () => {
                 const islemKategori = record.kategori || record.category;
                 const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
 
-                // Kategoriye göre ilgili kişiyi bul (Firma veya İşçi)
-                let muhatapAdi = 'Genel Kasa İşlemi';
-                if (islemKategori === 'Personel' || islemKategori === 'Maaş') {
+                let muhatapAdi = 'Bilinmiyor';
+                let renk = '#1890ff'; // Standart Firma Rengi
+
+                // Kimin işlemi olduğunu buluyoruz
+                if (rId === 'SAHSI_HARCAMA') {
+                    muhatapAdi = 'Şahsi / Şirket İçi Harcama';
+                    renk = '#cf1322'; // Kırmızı renk
+                } else if (islemKategori === 'Personel İşlemi (Maaş/Avans)') {
                     const isci = personeller.find(p => p._id === rId);
-                    if (isci) muhatapAdi = isci.adSoyad || isci.isim;
+                    if (isci) {
+                        muhatapAdi = isci.adSoyad || isci.isim;
+                        renk = '#faad14'; // Turuncu renk
+                    }
                 } else {
                     const cari = cariler.find(c => c._id === rId);
                     if (cari) muhatapAdi = cari.firmaAdi;
@@ -151,7 +164,7 @@ const KasaDefteri = () => {
 
                 return (
                     <div>
-                        <b style={{ fontSize: '14px', color: (islemKategori === 'Personel' ? '#faad14' : '#1890ff') }}>
+                        <b style={{ fontSize: '14px', color: renk }}>
                             {muhatapAdi}
                         </b><br />
                         <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
@@ -160,9 +173,16 @@ const KasaDefteri = () => {
 
                         {gosterilecekNot && (
                             <div style={{
-                                fontSize: '11px', color: '#595959', fontStyle: 'italic', marginTop: 4,
-                                whiteSpace: 'normal', wordBreak: 'break-word', background: '#fafafa',
-                                padding: '4px 6px', borderRadius: '4px', borderLeft: '2px solid #d9d9d9'
+                                fontSize: '11px',
+                                color: '#595959',
+                                fontStyle: 'italic',
+                                marginTop: 4,
+                                whiteSpace: 'normal',
+                                wordBreak: 'break-word',
+                                background: '#fafafa',
+                                padding: '4px 6px',
+                                borderRadius: '4px',
+                                borderLeft: '2px solid #d9d9d9'
                             }}>
                                 {gosterilecekNot}
                             </div>
@@ -205,7 +225,7 @@ const KasaDefteri = () => {
                         onClick: () => {
                             setEditingOdeme(record);
                             const currentCat = record.kategori || record.category;
-                            setSeciliKategori(currentCat); // Kategori bilgisini state'e at
+                            setSeciliKategori(currentCat);
 
                             form.setFieldsValue({
                                 ...record,
@@ -268,7 +288,7 @@ const KasaDefteri = () => {
                     </Space>
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => {
                         setEditingOdeme(null);
-                        setSeciliKategori(''); // Yeni eklerken kategoriyi sıfırla
+                        setSeciliKategori('');
                         form.resetFields();
                         setIsModalVisible(true);
                     }}>
@@ -312,37 +332,41 @@ const KasaDefteri = () => {
                         </Col>
                     </Row>
 
-                    {/* 🚀 ÇÖZÜM 2: Kategoriye onChange eklendi, arka planla birebir eşleşen value'lar kullanıldı */}
                     <Form.Item name="kategori" label="İşlem Kategorisi" rules={[{ required: true, message: 'Lütfen bir kategori seçin!' }]}>
                         <Select
                             placeholder="Kategori Seçiniz"
                             size="large"
                             onChange={(value) => {
-                                setSeciliKategori(value); // Seçimi kaydet
-                                form.setFieldsValue({ relatedId: undefined }); // Kategori değişirse kişiyi temizle!
+                                setSeciliKategori(value);
+                                form.setFieldsValue({ relatedId: undefined });
                             }}
                         >
-                            <Option value="Cari">Firma (Cari) İşlemi</Option>
-                            <Option value="Personel">Personel İşlemi (Maaş/Avans)</Option>
-                            <Option value="Kumaş/Malzeme">Kumaş/Malzeme</Option>
-                            <Option value="Fason Dikim">Fason Dikim</Option>
-                            <Option value="Yol/Yemek">Yol/Yemek</Option>
-                            <Option value="Kira/Fatura">Kira/Fatura</Option>
+                            <Option value="Firma (Cari) İşlemi">Genel Cari İşlemi</Option>
+                            <Option value="Personel İşlemi (Maaş/Avans)">Personel İşlemi (Maaş/Avans)</Option>
+                            <Option value="Kumaş/Malzeme">Kumaş/Malzeme Alımı</Option>
+                            <Option value="Fason Dikim">Fason Dikim Ödemesi</Option>
+                            <Option value="Yol/Yemek">Yol / Yemek Masrafı</Option>
+                            <Option value="Kira/Fatura">Kira / Fatura</Option>
                             <Option value="Diğer">Diğer</Option>
                         </Select>
                     </Form.Item>
 
-                    {/* 🚀 AKILLI AÇILIR KUTU: Personel seçiliyse işçiler, Cari seçiliyse firmalar, diğeri ise gizlenir */}
-                    {(seciliKategori === 'Cari' || seciliKategori === 'Personel') && (
-                        <Form.Item name="relatedId" label={seciliKategori === 'Personel' ? "İlgili Personel" : "İlgili Firma (Cari)"} rules={[{ required: true, message: 'Lütfen muhatap seçiniz!' }]}>
-                            <Select showSearch placeholder="Seçiniz..." size="large" allowClear optionFilterProp="children">
-                                {seciliKategori === 'Personel'
-                                    ? personeller.map(p => <Option key={p._id} value={p._id}>{p.adSoyad || p.isim}</Option>)
-                                    : cariler.map(c => <Option key={c._id} value={c._id}>{c.firmaAdi}</Option>)
-                                }
-                            </Select>
-                        </Form.Item>
-                    )}
+                    {/* 🚀 ZORUNLU MUHATAP SEÇİMİ (ŞAHSI HARCAMA İLE) */}
+                    <Form.Item name="relatedId" label="İşlemin Muhatabı (Kiminle Yapıldı?)" rules={[{ required: true, message: 'Lütfen işlemin kime ait olduğunu seçiniz!' }]}>
+                        <Select showSearch placeholder="Listedeki muhatabı seçin..." size="large" allowClear optionFilterProp="children">
+                            {seciliKategori === 'Personel İşlemi (Maaş/Avans)'
+                                ? personeller.map(p => <Option key={p._id} value={p._id}>👤 {p.adSoyad || p.isim}</Option>)
+                                : (
+                                    <>
+                                        <Option value="SAHSI_HARCAMA" style={{ color: '#cf1322', fontWeight: 'bold' }}>
+                                            ⚠️ Şahsi / Şirket İçi Harcama (Hesaba Yansımaz)
+                                        </Option>
+                                        {cariler.map(c => <Option key={c._id} value={c._id}>🏢 {c.firmaAdi}</Option>)}
+                                    </>
+                                )
+                            }
+                        </Select>
+                    </Form.Item>
 
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
