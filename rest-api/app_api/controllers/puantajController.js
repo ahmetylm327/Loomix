@@ -1,7 +1,6 @@
 const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
-const dayjs = require('dayjs');
 
 let Personel;
 try { Personel = mongoose.model('Personel'); }
@@ -27,10 +26,13 @@ catch (error) { Setting = mongoose.model('Setting', new mongoose.Schema({ key: S
 
 const upload = multer({ storage: multer.memoryStorage() }).single('file');
 
+// 🚀 ÇÖZÜM BURADA: Saat okuyucu artık nokta veya virgül görünce çökmeyecek!
 const timeToMinutes = (timeVal) => {
     if (timeVal == null) return 0;
     if (typeof timeVal === 'string') {
-        const parts = timeVal.split(':');
+        // "19.04" veya "19,04" formatlarını yakalayıp sessizce "19:04" yapar
+        const temizSaat = timeVal.replace(/[.,]/g, ':').trim();
+        const parts = temizSaat.split(':');
         if (parts.length < 2) return 0;
         return (Number(parts[0]) * 60) + Number(parts[1]);
     }
@@ -113,11 +115,10 @@ const puantajYukle = (req, res) => {
                     if (rawSatir[key] === null) continue;
                     let temizKey = metinTemizle(key);
 
-                    // 🚀 ÇÖZÜM BURADA: Sistemin kafası karışmasın diye "Tarih" araması, "Giriş" kelimesinin ÜSTÜNE alındı!
                     if (temizKey.includes('ad') || temizKey.includes('isim') || temizKey.includes('personel')) satir.AdSoyad = rawSatir[key];
-                    else if (temizKey.includes('tarih') || temizKey.includes('date')) satir.Tarih = rawSatir[key]; // ÖNCE TARİHİ AL
-                    else if (temizKey.includes('giris')) satir.GirisSaati = rawSatir[key]; // SONRA GİRİŞİ AL
-                    else if (temizKey.includes('cikis')) satir.CikisSaati = rawSatir[key]; // SONRA ÇIKIŞI AL
+                    else if (temizKey.includes('tarih') || temizKey.includes('date')) satir.Tarih = rawSatir[key];
+                    else if (temizKey.includes('giris')) satir.GirisSaati = rawSatir[key];
+                    else if (temizKey.includes('cikis')) satir.CikisSaati = rawSatir[key];
                     else if (temizKey.includes('gun') || temizKey.includes('mesai')) satir.Gun = rawSatir[key];
                     else if (temizKey.includes('tutar') || temizKey.includes('hakedis') || temizKey.includes('alacak')) satir.Tutar = rawSatir[key];
                 }
@@ -161,12 +162,14 @@ const puantajYukle = (req, res) => {
                             let islemGorecekGiris = gercekGiris;
                             let islemGorecekCikis = gercekCikis;
 
+                            // Erken gelirse tam saatinde gelmiş gibi say (Fazla mesai yok)
                             if (gercekGiris < aktifBaslangic) islemGorecekGiris = aktifBaslangic;
                             else {
                                 const gecikmeSuresi = gercekGiris - aktifBaslangic;
                                 if (gecikmeSuresi <= (tolerans || 0)) islemGorecekGiris = aktifBaslangic;
                             }
 
+                            // Geç çıkarsa tam saatinde çıkmış gibi say (Fazla mesai yok)
                             if (gercekCikis > aktifBitis) islemGorecekCikis = aktifBitis;
 
                             let toplamDakika = islemGorecekCikis - islemGorecekGiris;
