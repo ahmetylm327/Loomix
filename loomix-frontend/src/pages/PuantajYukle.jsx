@@ -17,12 +17,16 @@ const PuantajYukle = () => {
         try {
             const res = await axiosInstance.get('/attendance/settings');
             const { baslangic, bitis, molaBas, molaBit, tolerans, ctesiBaslangic, ctesiBitis } = res.data;
+
+            // 🚀 ÇÖZÜM: Ekranda da sıfırın silinip 15'e dönmesini engelledik!
+            const gecerliTolerans = (tolerans !== undefined && tolerans !== null) ? tolerans : 15;
+
             settingsForm.setFieldsValue({
                 baslangic: dayjs(baslangic, 'HH:mm'),
                 bitis: dayjs(bitis, 'HH:mm'),
                 molaBas: dayjs(molaBas, 'HH:mm'),
                 molaBit: dayjs(molaBit, 'HH:mm'),
-                tolerans: tolerans || 15,
+                tolerans: gecerliTolerans,
                 ctesiBaslangic: dayjs(ctesiBaslangic || "08:00", 'HH:mm'),
                 ctesiBitis: dayjs(ctesiBitis || "13:00", 'HH:mm')
             });

@@ -26,11 +26,9 @@ catch (error) { Setting = mongoose.model('Setting', new mongoose.Schema({ key: S
 
 const upload = multer({ storage: multer.memoryStorage() }).single('file');
 
-// 🚀 ÇÖZÜM BURADA: Saat okuyucu artık nokta veya virgül görünce çökmeyecek!
 const timeToMinutes = (timeVal) => {
     if (timeVal == null) return 0;
     if (typeof timeVal === 'string') {
-        // "19.04" veya "19,04" formatlarını yakalayıp sessizce "19:04" yapar
         const temizSaat = timeVal.replace(/[.,]/g, ':').trim();
         const parts = temizSaat.split(':');
         if (parts.length < 2) return 0;
@@ -88,6 +86,9 @@ const puantajYukle = (req, res) => {
             if (!settings) settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15, ctesiBaslangic: "08:00", ctesiBitis: "13:00" } };
 
             const { baslangic, bitis, molaBas, molaBit, tolerans, ctesiBaslangic = "08:00", ctesiBitis = "13:00" } = settings.value;
+
+            // 🚀 ÇÖZÜM: 0'ı boş sanıp 15'e geri dönmesini engelliyoruz!
+            const gecerliTolerans = (tolerans !== undefined && tolerans !== null) ? Number(tolerans) : 15;
 
             const mesaiBaslangicDakika = timeToMinutes(baslangic);
             const mesaiBitisDakika = timeToMinutes(bitis);
@@ -162,14 +163,13 @@ const puantajYukle = (req, res) => {
                             let islemGorecekGiris = gercekGiris;
                             let islemGorecekCikis = gercekCikis;
 
-                            // Erken gelirse tam saatinde gelmiş gibi say (Fazla mesai yok)
                             if (gercekGiris < aktifBaslangic) islemGorecekGiris = aktifBaslangic;
                             else {
                                 const gecikmeSuresi = gercekGiris - aktifBaslangic;
-                                if (gecikmeSuresi <= (tolerans || 0)) islemGorecekGiris = aktifBaslangic;
+                                // 🚀 ÇÖZÜM: gecerliTolerans devrede!
+                                if (gecikmeSuresi <= gecerliTolerans) islemGorecekGiris = aktifBaslangic;
                             }
 
-                            // Geç çıkarsa tam saatinde çıkmış gibi say (Fazla mesai yok)
                             if (gercekCikis > aktifBitis) islemGorecekCikis = aktifBitis;
 
                             let toplamDakika = islemGorecekCikis - islemGorecekGiris;
