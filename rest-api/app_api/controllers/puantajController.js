@@ -1,6 +1,7 @@
 const multer = require('multer');
 const xlsx = require('xlsx');
 const mongoose = require('mongoose');
+const dayjs = require('dayjs'); // Added dayjs for robust date parsing
 
 let Personel;
 try { Personel = mongoose.model('Personel'); }
@@ -48,16 +49,35 @@ const metinTemizle = (metin) => {
         .replace(/[^a-z0-9]/g, '');
 };
 
-// 🚀 YENİ: Excel tarihlerini her koşulda kusursuz Türkçe tarihe çevirir
 const excelTarihCevir = (val) => {
     if (!val) return new Date().toLocaleDateString('tr-TR');
     if (typeof val === 'number') {
         const date = new Date((val - 25569) * 86400 * 1000);
         return date.toLocaleDateString('tr-TR');
     }
-    // Eğer direkt string geldiyse (örn: "02.05.2026") dokunma
     return val.toString();
 };
+
+// YENİ: Verilen tarihin Cumartesi olup olmadığını kontrol eder
+const isCumartesi = (val) => {
+    if (!val) return false;
+    let dateObj;
+    if (typeof val === 'number') {
+        dateObj = new Date((val - 25569) * 86400 * 1000);
+    } else {
+        // Simple string parsing, assuming DD.MM.YYYY or similar common formats
+        // This is a basic check. For very robust parsing across many formats, consider using dayjs or moment here too.
+        const parts = val.toString().split(/[./-]/);
+        if (parts.length === 3) {
+            // Attempt to parse DD MM YYYY
+            dateObj = new Date(parts[2], parts[1] - 1, parts[0]);
+        } else {
+            dateObj = new Date(val);
+        }
+    }
+    return dateObj.getDay() === 6; // 0 is Sunday, 6 is Saturday
+};
+
 
 const puantajYukle = (req, res) => {
     upload(req, res, async (err) => {
@@ -67,8 +87,12 @@ const puantajYukle = (req, res) => {
         try {
             let settings;
             if (Setting) settings = await Setting.findOne({ key: 'mesai_ayarlari' });
-            if (!settings) settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 } };
-            const { baslangic, bitis, molaBas, molaBit, tolerans } = settings.value;
+
+            // 🚀 YENİ: Varsayılan ayarlara 'cumartesiHedef' eklendi (varsayılan 5 saat)
+            if (!settings) settings = { value: { baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15, cumartesiHedef: 5 } };
+
+            const { baslangic, bitis, molaBas, molaBit, tolerans, cumartesiHedef } = settings.value;
+            const ctesiHedefSaat = cumartesiHedef || 5;
 
             const mesaiBaslangicDakika = timeToMinutes(baslangic);
             const mesaiBitisDakika = timeToMinutes(bitis);
@@ -108,7 +132,7 @@ const puantajYukle = (req, res) => {
                 if (!satir.AdSoyad) continue;
 
                 const aranacakIsim = satir.AdSoyad.toString().trim();
-                const satirTarihi = excelTarihCevir(satir.Tarih); // 🚀 Tarihi yakaladık!
+                const satirTarihi = excelTarihCevir(satir.Tarih);
 
                 const personel = await Personel.findOne({
                     adSoyad: { $regex: new RegExp('^' + aranacakIsim + '$', 'i') },
@@ -150,10 +174,18 @@ const puantajYukle = (req, res) => {
                             let toplamDakika = islemGorecekCikis - islemGorecekGiris;
 
                             if (toplamDakika > 0) {
-                                if (islemGorecekGiris <= molaBasDakika && islemGorecekCikis >= molaBitDakika) toplamDakika -= molaSure;
+                                // Mola hesaplaması
+                                if (islemGorecekGiris <= molaBasDakika && islemGorecekCikis >= molaBitDakika) {
+                                    toplamDakika -= molaSure;
+                                }
 
                                 const calismaSaati = toplamDakika / 60;
-                                gunKatsayi = calismaSaati / standartGunlukSaat;
+
+                                // 🚀 YENİ: Cumartesi kontrolü ve katsayı hesaplaması
+                                const buCumartesiMi = isCumartesi(satir.Tarih);
+                                const hedefSaat = buCumartesiMi ? ctesiHedefSaat : standartGunlukSaat;
+
+                                gunKatsayi = calismaSaati / hedefSaat;
 
                                 if (gunKatsayi > 1) gunKatsayi = 1;
 
@@ -181,12 +213,11 @@ const puantajYukle = (req, res) => {
                         islenenPersoneller[personel._id].tarihler.push(satirTarihi);
 
                     } else {
-                        // 🚀 YENİ: Hata durumunda hangi gün olduğunu frontend'e yolluyoruz!
                         eksikBasimlar.push({
                             isim: aranacakIsim,
-                            tarih: satirTarihi, // Eklendi!
-                            giris: satir.GirisSaati || '-', // Eklendi!
-                            cikis: satir.CikisSaati || '-', // Eklendi!
+                            tarih: satirTarihi,
+                            giris: satir.GirisSaati || '-',
+                            cikis: satir.CikisSaati || '-',
                             mesaj: "Saat yetersiz, basım eksik veya maaş 0 TL."
                         });
                     }
@@ -204,13 +235,12 @@ const puantajYukle = (req, res) => {
                 p.bakiye = (p.bakiye || 0) + hakedisNum;
                 await p.save();
 
-                // 🚀 YENİ: Tarih aralığını şık bir metne çevirme (Örn: 01.05.2026 ile 05.05.2026)
                 let islemTarihiMetni = data.tarihler[0];
                 if (data.tarihler.length > 1) {
                     let ilkTarih = data.tarihler[0];
                     let sonTarih = data.tarihler[data.tarihler.length - 1];
                     if (ilkTarih !== sonTarih) {
-                        islemTarihiMetni = `${ilkTarih} ile ${sonTarih}`; // Daha güzel bir okunuş
+                        islemTarihiMetni = `${ilkTarih} ile ${sonTarih}`;
                     }
                 }
 
@@ -257,7 +287,8 @@ const ayarlarıGetir = async (req, res) => {
         let settings;
         if (Setting) settings = await Setting.findOne({ key: 'mesai_ayarlari' });
         if (settings) { res.status(200).json(settings.value); }
-        else { res.status(200).json({ baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15 }); }
+        // 🚀 YENİ: GET isteğinde de cumartesiHedef'i gönderiyoruz
+        else { res.status(200).json({ baslangic: "08:00", bitis: "19:00", molaBas: "12:30", molaBit: "13:30", tolerans: 15, cumartesiHedef: 5 }); }
     } catch (e) { res.status(500).json({ mesaj: "Ayarlar çekilemedi" }); }
 };
 

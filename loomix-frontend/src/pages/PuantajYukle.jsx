@@ -16,13 +16,15 @@ const PuantajYukle = () => {
     const fetchSettings = async () => {
         try {
             const res = await axiosInstance.get('/attendance/settings');
-            const { baslangic, bitis, molaBas, molaBit, tolerans } = res.data;
+            // 🚀 YENİ: cumartesiHedef eklendi
+            const { baslangic, bitis, molaBas, molaBit, tolerans, cumartesiHedef } = res.data;
             settingsForm.setFieldsValue({
                 baslangic: dayjs(baslangic, 'HH:mm'),
                 bitis: dayjs(bitis, 'HH:mm'),
                 molaBas: dayjs(molaBas, 'HH:mm'),
                 molaBit: dayjs(molaBit, 'HH:mm'),
-                tolerans: tolerans || 15
+                tolerans: tolerans || 15,
+                cumartesiHedef: cumartesiHedef || 5 // Varsayılan 5
             });
         } catch (e) { console.log("Ayarlar çekilemedi."); }
     };
@@ -33,7 +35,8 @@ const PuantajYukle = () => {
             bitis: values.bitis.format('HH:mm'),
             molaBas: values.molaBas.format('HH:mm'),
             molaBit: values.molaBit.format('HH:mm'),
-            tolerans: values.tolerans
+            tolerans: values.tolerans,
+            cumartesiHedef: values.cumartesiHedef // 🚀 YENİ: Backend'e gönderiliyor
         };
         try {
             await axiosInstance.post('/attendance/settings', payload);
@@ -48,19 +51,17 @@ const PuantajYukle = () => {
         formData.append('file', file);
 
         try {
-            // 🚀 ÇÖZÜM: CORS DUVARINI DELEN AYAR BURADA (withCredentials: true ve Accept Eklendi)
             const response = await axiosInstance.post('/attendance/upload', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                     'Accept': 'application/json'
                 },
-                withCredentials: true // Tarayıcıya "Bu yetkili bir istek" der ve CORS'u aşar
+                withCredentials: true
             });
             message.success(`${file.name} başarıyla işlendi!`);
             setRapor(response.data.ozet);
             onSuccess("Ok");
         } catch (error) {
-            // Hata mesajını daha açıklayıcı yakalıyoruz
             const errMsj = error.response?.data?.mesaj || error.message || "Dosya yüklenirken hata oluştu!";
             message.error(errMsj);
             onError("Hata");
@@ -93,7 +94,6 @@ const PuantajYukle = () => {
             key: 'tahakkuk',
             render: (_, record) => (
                 <div>
-                    {/* Rapor ekranında gün sayısını çok daha net gösteriyoruz */}
                     <Tag color="blue" style={{ fontSize: '11px' }}>Toplam {record.gun} Günlük</Tag>
                     <b style={{ color: '#52c41a', fontSize: '14px', marginLeft: '5px' }}>+ {record.tahakkukTutar} ₺</b>
                 </div>
@@ -118,7 +118,6 @@ const PuantajYukle = () => {
         { title: 'Aksiyon', align: 'right', render: () => <Tag color="warning">Sisteme Ekleyin</Tag> }
     ];
 
-    // 🚀 YENİ: Eksik Basım tablosuna "Hatalı Tarih" sütunu eklendi!
     const eksikBasimSutunlar = [
         { title: 'Personel', dataIndex: 'isim', render: val => <b>{val}</b> },
         { title: 'Hatalı Tarih', dataIndex: 'tarih', render: val => <Tag color="blue">{val || '-'}</Tag> },
@@ -165,9 +164,20 @@ const PuantajYukle = () => {
                         <Col span={12}><Form.Item name="baslangic" label="Mesai Başlangıç" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
                         <Col span={12}><Form.Item name="bitis" label="Mesai Bitiş" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
                     </Row>
-                    <Form.Item name="tolerans" label="Geç Kalma Toleransı (Dakika)" tooltip="Örn: 15 yazarsanız, 08:15'e kadar gelenlerden kesinti yapılmaz.">
-                        <InputNumber min={0} max={60} style={{ width: '100%' }} size="large" addonAfter="Dakika" />
-                    </Form.Item>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item name="tolerans" label="Geç Kalma Toleransı (Dakika)" tooltip="Örn: 15 yazarsanız, 08:15'e kadar gelenlerden kesinti yapılmaz.">
+                                <InputNumber min={0} max={60} style={{ width: '100%' }} size="large" addonAfter="Dakika" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            {/* 🚀 YENİ: Cumartesi Hedef Saati Girişi */}
+                            <Form.Item name="cumartesiHedef" label="Cumartesi Tam Gün (Saat)" tooltip="Cumartesi günleri kaç saat çalışınca tam yevmiye hak edilir? (Genelde 5 saat)">
+                                <InputNumber min={1} max={12} style={{ width: '100%' }} size="large" addonAfter="Saat" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
                     <Divider>Mola Saatleri (Ücretten Düşülür)</Divider>
                     <Row gutter={16}>
                         <Col span={12}><Form.Item name="molaBas" label="Mola Başlangıç" rules={[{ required: true }]}><TimePicker format="HH:mm" style={{ width: '100%' }} /></Form.Item></Col>
