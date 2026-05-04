@@ -18,22 +18,33 @@ const { confirm } = Modal;
 const KasaDefteri = () => {
     const [data, setData] = useState([]);
     const [cariler, setCariler] = useState([]);
+    const [personeller, setPersoneller] = useState([]); // 🚀 YENİ: İşçi listesi eklendi
     const [loading, setLoading] = useState(true);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
     const [editingOdeme, setEditingOdeme] = useState(null);
     const [stats, setStats] = useState({ toplamGelir: 0, toplamGider: 0, netBakiye: 0 });
+    const [seciliKategori, setSeciliKategori] = useState(''); // 🚀 YENİ: Seçilen kategoriyi takip edeceğiz
 
     useEffect(() => {
         fetchData();
         fetchCariler();
+        fetchPersoneller(); // 🚀 Sayfa açıldığında personelleri de çeker
     }, []);
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const response = await axiosInstance.get('/payments');
-            const islemler = response.data;
+            let islemler = response.data;
+
+            // 🚀 ÇÖZÜM 1: TARİHE GÖRE KRONOLOJİK SIRALAMA (En yeni tarih en üstte)
+            islemler.sort((a, b) => {
+                const tarihA = dayjs(a.odemeTarihi || a.paymentDate).valueOf();
+                const tarihB = dayjs(b.odemeTarihi || b.paymentDate).valueOf();
+                return tarihB - tarihA;
+            });
+
             setData(islemler);
 
             let gelir = 0;
@@ -58,9 +69,19 @@ const KasaDefteri = () => {
         } catch (error) { console.log("Cari listesi alınamadı."); }
     };
 
+    const fetchPersoneller = async () => {
+        try {
+            // Arka plandaki route ismine göre ikisinden birini dener
+            let response;
+            try { response = await axiosInstance.get('/employees'); }
+            catch (e) { response = await axiosInstance.get('/personel'); }
+
+            setPersoneller(response.data);
+        } catch (error) { console.log("Personel listesi alınamadı."); }
+    };
+
     const handleSave = async (values) => {
         try {
-            // YENİ: Backend'in notları yutmaması için hem notlar hem notes olarak gönderiyoruz
             const payload = {
                 islemYonu: values.islemYonu,
                 tutar: values.tutar,
@@ -83,6 +104,7 @@ const KasaDefteri = () => {
             }
             setIsModalVisible(false);
             setEditingOdeme(null);
+            setSeciliKategori('');
             form.resetFields();
             fetchData();
         } catch (error) {
@@ -93,13 +115,13 @@ const KasaDefteri = () => {
     const showDeleteConfirm = (id) => {
         confirm({
             title: 'Kasa İşlemini Sil',
-            content: 'Bu kasa işlemini silmek istediğinize emin misiniz? Bakiye yeniden hesaplanacaktır.',
+            content: 'Bu işlemi silerseniz hesap bakiyeleri (Firma/Personel) tersine dönecektir! Emin misiniz?',
             okText: 'Evet, Sil',
             okType: 'danger',
             cancelText: 'Vazgeç',
             onOk() {
                 axiosInstance.delete(`/payments/${id}`).then(() => {
-                    message.success("İşlem başarıyla silindi!");
+                    message.success("İşlem silindi ve bakiyeler güncellendi!");
                     fetchData();
                 }).catch(() => message.error("Silme işlemi başarısız!"));
             },
@@ -111,33 +133,36 @@ const KasaDefteri = () => {
             title: 'İşlem Detayı',
             key: 'detay',
             render: (_, record) => {
-                const cariId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
-                const cari = cariler.find(c => c._id === cariId);
-                const tip = record.islemYonu || record.transactionType;
+                const islemKategori = record.kategori || record.category;
+                const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
 
-                // YENİ: Veritabanından hangi isimle gelirse gelsin yakalama motoru
+                // Kategoriye göre ilgili kişiyi bul (Firma veya İşçi)
+                let muhatapAdi = 'Genel Kasa İşlemi';
+                if (islemKategori === 'Personel' || islemKategori === 'Maaş') {
+                    const isci = personeller.find(p => p._id === rId);
+                    if (isci) muhatapAdi = isci.adSoyad || isci.isim;
+                } else {
+                    const cari = cariler.find(c => c._id === rId);
+                    if (cari) muhatapAdi = cari.firmaAdi;
+                }
+
+                const tip = record.islemYonu || record.transactionType;
                 const gosterilecekNot = record.notlar || record.notes || record.aciklama || record.description;
 
                 return (
                     <div>
-                        <b style={{ fontSize: '14px', color: '#1890ff' }}>{cari ? cari.firmaAdi : 'Genel Kasa'}</b><br />
+                        <b style={{ fontSize: '14px', color: (islemKategori === 'Personel' ? '#faad14' : '#1890ff') }}>
+                            {muhatapAdi}
+                        </b><br />
                         <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                            {dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY')} - {record.kategori || 'Genel'}
+                            {dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY')} - {islemKategori || 'Genel'}
                         </span>
 
-                        {/* YENİ: Garantili Not Gösterimi ve Taşma Engelleme */}
                         {gosterilecekNot && (
                             <div style={{
-                                fontSize: '11px',
-                                color: '#595959',
-                                fontStyle: 'italic',
-                                marginTop: 4,
-                                whiteSpace: 'normal',
-                                wordBreak: 'break-word',
-                                background: '#fafafa',
-                                padding: '4px 6px',
-                                borderRadius: '4px',
-                                borderLeft: '2px solid #d9d9d9'
+                                fontSize: '11px', color: '#595959', fontStyle: 'italic', marginTop: 4,
+                                whiteSpace: 'normal', wordBreak: 'break-word', background: '#fafafa',
+                                padding: '4px 6px', borderRadius: '4px', borderLeft: '2px solid #d9d9d9'
                             }}>
                                 {gosterilecekNot}
                             </div>
@@ -179,15 +204,18 @@ const KasaDefteri = () => {
                         icon: <EditOutlined style={{ color: '#1890ff' }} />,
                         onClick: () => {
                             setEditingOdeme(record);
+                            const currentCat = record.kategori || record.category;
+                            setSeciliKategori(currentCat); // Kategori bilgisini state'e at
+
                             form.setFieldsValue({
                                 ...record,
                                 islemYonu: record.islemYonu || record.transactionType,
                                 tutar: record.tutar || record.amount,
-                                kategori: record.kategori || record.category,
+                                kategori: currentCat,
                                 odemeTipi: record.odemeTipi || record.paymentType,
                                 odemeTarihi: dayjs(record.odemeTarihi || record.paymentDate),
                                 relatedId: record.relatedId?._id || record.relatedId,
-                                notlar: record.notlar || record.notes || record.aciklama // Düzenlerken kutuya geri dolsun
+                                notlar: record.notlar || record.notes || record.aciklama
                             });
                             setIsModalVisible(true);
                         }
@@ -217,12 +245,12 @@ const KasaDefteri = () => {
             <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
                 <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ borderLeft: '5px solid #52c41a', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <Statistic title="Toplam Tahsilat" value={stats.toplamGelir} precision={2} styles={{ content: { color: '#52c41a' } }} prefix={<ArrowUpOutlined />} suffix="₺" />
+                        <Statistic title="Toplam Tahsilat (Gelir)" value={stats.toplamGelir} precision={2} styles={{ content: { color: '#52c41a' } }} prefix={<ArrowUpOutlined />} suffix="₺" />
                     </Card>
                 </Col>
                 <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ borderLeft: '5px solid #ff4d4f', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <Statistic title="Toplam Ödeme" value={stats.toplamGider} precision={2} styles={{ content: { color: '#ff4d4f' } }} prefix={<ArrowDownOutlined />} suffix="₺" />
+                        <Statistic title="Toplam Ödeme (Gider)" value={stats.toplamGider} precision={2} styles={{ content: { color: '#ff4d4f' } }} prefix={<ArrowDownOutlined />} suffix="₺" />
                     </Card>
                 </Col>
                 <Col xs={24} sm={8}>
@@ -232,16 +260,18 @@ const KasaDefteri = () => {
                 </Col>
             </Row>
 
-            <Card
-                variant="borderless"
-                style={{ borderRadius: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', padding: '5px' }}
-            >
+            <Card variant="borderless" style={{ borderRadius: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', padding: '5px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: 15 }}>
                     <Space>
                         <WalletOutlined style={{ color: '#1890ff', fontSize: '20px' }} />
                         <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Kasa Defteri</span>
                     </Space>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingOdeme(null); form.resetFields(); setIsModalVisible(true); }}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+                        setEditingOdeme(null);
+                        setSeciliKategori(''); // Yeni eklerken kategoriyi sıfırla
+                        form.resetFields();
+                        setIsModalVisible(true);
+                    }}>
                         Yeni İşlem
                     </Button>
                 </div>
@@ -282,22 +312,37 @@ const KasaDefteri = () => {
                         </Col>
                     </Row>
 
+                    {/* 🚀 ÇÖZÜM 2: Kategoriye onChange eklendi, arka planla birebir eşleşen value'lar kullanıldı */}
                     <Form.Item name="kategori" label="İşlem Kategorisi" rules={[{ required: true, message: 'Lütfen bir kategori seçin!' }]}>
-                        <Select placeholder="Kategori Seçiniz" size="large">
-                            <Option value="Fason Dikim">Fason Dikim</Option>
-                            <Option value="Personel Maaş">Personel Maaş</Option>
+                        <Select
+                            placeholder="Kategori Seçiniz"
+                            size="large"
+                            onChange={(value) => {
+                                setSeciliKategori(value); // Seçimi kaydet
+                                form.setFieldsValue({ relatedId: undefined }); // Kategori değişirse kişiyi temizle!
+                            }}
+                        >
+                            <Option value="Cari">Firma (Cari) İşlemi</Option>
+                            <Option value="Personel">Personel İşlemi (Maaş/Avans)</Option>
                             <Option value="Kumaş/Malzeme">Kumaş/Malzeme</Option>
+                            <Option value="Fason Dikim">Fason Dikim</Option>
                             <Option value="Yol/Yemek">Yol/Yemek</Option>
                             <Option value="Kira/Fatura">Kira/Fatura</Option>
                             <Option value="Diğer">Diğer</Option>
                         </Select>
                     </Form.Item>
 
-                    <Form.Item name="relatedId" label="İlgili Cari (Müşteri / Personel)">
-                        <Select showSearch placeholder="Cari Seçiniz (Opsiyonel)" size="large" allowClear optionFilterProp="children">
-                            {cariler.map(c => <Option key={c._id} value={c._id}>{c.firmaAdi} ({c.kategori})</Option>)}
-                        </Select>
-                    </Form.Item>
+                    {/* 🚀 AKILLI AÇILIR KUTU: Personel seçiliyse işçiler, Cari seçiliyse firmalar, diğeri ise gizlenir */}
+                    {(seciliKategori === 'Cari' || seciliKategori === 'Personel') && (
+                        <Form.Item name="relatedId" label={seciliKategori === 'Personel' ? "İlgili Personel" : "İlgili Firma (Cari)"} rules={[{ required: true, message: 'Lütfen muhatap seçiniz!' }]}>
+                            <Select showSearch placeholder="Seçiniz..." size="large" allowClear optionFilterProp="children">
+                                {seciliKategori === 'Personel'
+                                    ? personeller.map(p => <Option key={p._id} value={p._id}>{p.adSoyad || p.isim}</Option>)
+                                    : cariler.map(c => <Option key={c._id} value={c._id}>{c.firmaAdi}</Option>)
+                                }
+                            </Select>
+                        </Form.Item>
+                    )}
 
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
@@ -317,7 +362,7 @@ const KasaDefteri = () => {
                     </Row>
 
                     <Form.Item name="notlar" label="Açıklama">
-                        <Input.TextArea rows={2} placeholder="Fatura veya dekont açıklaması..." />
+                        <Input.TextArea rows={2} placeholder="Fatura, dekont veya maaş ay açıklaması..." />
                     </Form.Item>
                 </Form>
             </Modal>
