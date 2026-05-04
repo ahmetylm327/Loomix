@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Col, Row, Statistic, Typography, Spin, Table, Tag, Space } from 'antd';
+import { Card, Col, Row, Statistic, Typography, Spin, Table, Tag, Space, Divider } from 'antd';
 import {
-    UserOutlined, ShopOutlined, BoxPlotOutlined, WalletOutlined,
-    LineChartOutlined, PieChartOutlined, HistoryOutlined
+    UserOutlined, ShopOutlined, WalletOutlined,
+    LineChartOutlined, PieChartOutlined, HistoryOutlined, FallOutlined, RiseOutlined
 } from '@ant-design/icons';
 import { Line, Pie } from '@ant-design/charts';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 const Dashboard = () => {
     const [stats, setStats] = useState(null);
@@ -28,112 +28,103 @@ const Dashboard = () => {
         fetchStats();
     }, []);
 
-    if (loading) return <div style={{ textAlign: 'center', marginTop: 100 }}><Spin size="large" description="Veriler Hazırlanıyor..." /></div>;
+    if (loading) return <div style={{ textAlign: 'center', marginTop: 100 }}><Spin size="large" description="Yönetim Paneli Hazırlanıyor..." /></div>;
 
-    // --- GRAFİK VERİLERİ ---
-    const lineData = stats?.haftalikUretim || [
-        { tarih: 'Pzt', adet: 450 }, { tarih: 'Sal', adet: 520 },
-        { tarih: 'Çar', adet: 380 }, { tarih: 'Per', adet: 650 },
-        { tarih: 'Cum', adet: 710 }, { tarih: 'Cmt', adet: 480 }
-    ];
-
+    // --- GRAFİKLER ---
     const lineConfig = {
-        data: lineData,
+        data: stats?.haftalikUretim || [{ tarih: 'Pzt', adet: 120 }, { tarih: 'Sal', adet: 200 }, { tarih: 'Çar', adet: 150 }, { tarih: 'Per', adet: 300 }],
         xField: 'tarih',
         yField: 'adet',
         point: { size: 5, shape: 'diamond' },
         color: '#1890ff',
         smooth: true,
-        // Mobilde grafiğin daha iyi görünmesi için padding ayarı
         padding: 'auto',
     };
 
-    const pieData = stats?.kategoriDagilimi || [
-        { type: 'Üst Giyim', value: 40 }, { type: 'Alt Giyim', value: 25 },
-        { type: 'Aksesuar', value: 15 }, { type: 'Diğer', value: 20 },
-    ];
-
     const pieConfig = {
         appendPadding: 10,
-        data: pieData,
+        data: stats?.kategoriDagilimi || [{ type: 'Aktif', value: 40 }, { type: 'Pasif', value: 10 }],
         angleField: 'value',
         colorField: 'type',
         radius: 0.8,
-        label: {
-            text: (datum) => `${datum.type}: ${datum.value}`,
-            style: { fontSize: 14, fontWeight: 'bold' }
-        },
+        label: { text: (datum) => `${datum.type}: ${datum.value}`, style: { fontSize: 13, fontWeight: 'bold' } },
         interactions: [{ type: 'element-active' }],
     };
 
     const islemSutunlar = [
-        { title: 'Tarih', dataIndex: 'odemeTarihi', render: t => dayjs(t).format('DD.MM.YYYY') },
-        { title: 'Açıklama', dataIndex: 'notlar', render: n => n || 'Kasa İşlemi' },
-        { title: 'Yön', dataIndex: 'islemYonu', render: y => <Tag color={y === 'Gelir' ? 'green' : 'red'}>{y}</Tag> },
-        { title: 'Tutar', dataIndex: 'tutar', align: 'right', render: (t, r) => <b style={{ color: r.islemYonu === 'Gelir' ? '#52c41a' : '#f5222d', fontSize: '15px' }}>{t} ₺</b> }
+        { title: 'Tarih', dataIndex: 'odemeTarihi', width: 100, render: t => dayjs(t).format('DD.MM.YYYY') },
+        { title: 'İşlem Türü', dataIndex: 'islemYonu', width: 120, render: y => <Tag color={y === 'Gelir' ? 'success' : 'error'} icon={y === 'Gelir' ? <RiseOutlined /> : <FallOutlined />}>{y === 'Gelir' ? 'Tahsilat' : 'Ödeme'}</Tag> },
+        { title: 'Açıklama', dataIndex: 'notlar', render: n => <Text type="secondary">{n || 'Kasa İşlemi'}</Text> },
+        { title: 'Tutar', dataIndex: 'tutar', align: 'right', render: (t, r) => <b style={{ color: r.islemYonu === 'Gelir' ? '#52c41a' : '#f5222d', fontSize: '15px' }}>{r.islemYonu === 'Gelir' ? '+' : '-'}{t?.toLocaleString('tr-TR')} ₺</b> }
     ];
 
     return (
-        // YENİ: Mobilde kenar boşluklarını azalttık (padding: 15px) ve yatay taşmayı engelledik (overflowX)
-        <div style={{ padding: '15px', background: '#f0f2f5', minHeight: '100vh', overflowX: 'hidden' }}>
-            {/* YENİ: Başlık boyutunu mobilde çok yer kaplamaması için ayarlıyoruz */}
-            <Title level={3} style={{ marginBottom: 20 }}>
-                <LineChartOutlined /> Atölye Yönetim Paneli
-            </Title>
+        <div style={{ padding: '20px', background: '#f0f2f5', minHeight: '100vh', overflowX: 'hidden' }}>
 
+            <div style={{ marginBottom: 25, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                    <Title level={3} style={{ margin: 0, color: '#1f1f1f' }}>Loomix ERP Komuta Merkezi</Title>
+                    <Text type="secondary">Atölyenizin güncel finansal ve operasyonel durumu.</Text>
+                </div>
+            </div>
+
+            {/* 🚀 1. SATIR: EN KRİTİK FİNANSAL VERİLER (KOKPİT) */}
             <Row gutter={[16, 16]}>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card variant="borderless" style={{ borderTop: '4px solid #1890ff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card variant="borderless" style={{ borderLeft: '5px solid #1890ff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <Statistic title="Aktif Personel" value={stats?.personelSayisi || 0} prefix={<UserOutlined style={{ color: '#1890ff' }} />} />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card variant="borderless" style={{ borderTop: '4px solid #52c41a', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                        <Statistic title="Aktif Müşteriler" value={stats?.cariSayisi || 0} prefix={<ShopOutlined style={{ color: '#52c41a' }} />} />
+                    <Card variant="borderless" style={{ borderLeft: '5px solid #52c41a', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <Statistic title="Aktif Müşteriler (Cari)" value={stats?.cariSayisi || 0} prefix={<ShopOutlined style={{ color: '#52c41a' }} />} />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card variant="borderless" style={{ borderTop: '4px solid #faad14', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                        <Statistic title="Aktif Modeller" value={stats?.urunSayisi || 0} prefix={<BoxPlotOutlined style={{ color: '#faad14' }} />} />
+                    <Card variant="borderless" style={{ borderLeft: '5px solid #faad14', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <Statistic title="Sistemdeki Modeller" value={stats?.urunSayisi || 0} prefix={<PieChartOutlined style={{ color: '#faad14' }} />} />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card variant="borderless" style={{ borderTop: '4px solid #f5222d', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card variant="borderless" style={{ borderLeft: '5px solid #f5222d', background: '#fff1f0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <Statistic
-                            title="Net Kasa Bakiyesi"
+                            title={<span style={{ color: '#cf1322', fontWeight: 'bold' }}>Net Kasa Durumu</span>}
                             value={stats?.netKasa || 0}
                             precision={2}
                             suffix="₺"
-                            prefix={<WalletOutlined style={{ color: '#f5222d' }} />}
+                            prefix={<WalletOutlined style={{ color: '#cf1322' }} />}
+                            valueStyle={{ color: '#cf1322', fontWeight: 'bold' }}
                         />
                     </Card>
                 </Col>
             </Row>
 
-            <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
+            <Divider style={{ margin: '24px 0', borderColor: '#d9d9d9' }} />
+
+            {/* 🚀 2. SATIR: GRAFİKLER VE SAHA OPERASYONLARI */}
+            <Row gutter={[16, 16]}>
                 <Col xs={24} lg={16}>
-                    <Card title={<Space><LineChartOutlined /> Haftalık Üretim</Space>} variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                        {/* Mobilde grafik yüksekliğini bir miktar kıstık */}
-                        <div style={{ height: 280 }}><Line {...lineConfig} /></div>
+                    <Card title={<Space><LineChartOutlined /> Haftalık Üretim / Operasyon Grafiği</Space>} variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <div style={{ height: 300 }}><Line {...lineConfig} /></div>
                     </Card>
                 </Col>
                 <Col xs={24} lg={8}>
-                    <Card title={<Space><PieChartOutlined /> Kategori Dağılımı</Space>} variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                        <div style={{ height: 280 }}><Pie {...pieConfig} /></div>
+                    <Card title={<Space><PieChartOutlined /> Model / Ürün Dağılımı</Space>} variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <div style={{ height: 300 }}><Pie {...pieConfig} /></div>
                     </Card>
                 </Col>
             </Row>
 
+            {/* 🚀 3. SATIR: SON İŞLEMLER (LOGLAR) */}
             <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
                 <Col span={24}>
-                    <Card title={<Space><HistoryOutlined /> Son Kasa Hareketleri</Space>} variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                        {/* YENİ: Mobilde tablo sıkışmasın diye yana kaydırma (scroll) özelliği eklendi */}
+                    <Card title={<Space><HistoryOutlined /> Son Yapılan Finansal İşlemler</Space>} variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <Table
                             dataSource={stats?.sonIslemler || []}
                             columns={islemSutunlar}
                             rowKey={(record) => record._id || Math.random()}
-                            pagination={false}
-                            size="small"
+                            pagination={{ pageSize: 5 }}
+                            size="middle"
                             scroll={{ x: 'max-content' }}
                         />
                     </Card>

@@ -75,61 +75,57 @@ const getCariEkstre = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // 1. Ödemeleri çek (Şemandaki alan adı: ilgiliId)
+        // Firmanın kasa hareketleri ve kesilen üretim fişleri çekilir
         const odemeler = await Odeme.find({ ilgiliId: id });
-
-        // 2. Üretimleri çek 
-        // DİKKAT: Üretim şemanda cariId yok! 
-        // Eğer üretimleri cariye bağlamadıysan burası boş döner. 
-        // Şimdilik hata vermemesi için boş dizi atayalım veya ilgili alanı şemana eklemelisin.
         const uretimler = await Uretim.find({ cariId: id }).populate('productId');
 
         let ekstre = [];
 
-        // Üretim döngüsü
+        // 1. Üretimler (Firmaya mal verdik -> Firmanın Bize Borcu ARTTI)
         uretimler.forEach(u => {
             const tutar = u.quantity * (u.birimFiyat || 0);
             ekstre.push({
                 key: u._id,
                 tarih: u.productionDate,
-                islemCinsi: "Üretim Girişi",
-                aciklama: `${u.productId?.urunAdi || 'Ürün'} - ${u.quantity} Adet Dikim`,
-                borc: tutar,
+                islemCinsi: "Üretim / Fiş Kesimi",
+                aciklama: `${u.productId?.urunAdi || 'Ürün'} - ${u.quantity} Adet`,
+                borc: tutar, // Firmanın borcuna yazılır
                 alacak: 0,
             });
         });
 
-        // Ödeme döngüsü
+        // 2. Ödemeler (Kasadan yapılan işlemler)
         odemeler.forEach(o => {
             ekstre.push({
                 key: o._id,
                 tarih: o.odemeTarihi,
-                islemCinsi: `Kasa (${o.islemYonu})`,
-                aciklama: o.notlar || "Ödeme Tahsilatı",
-                borc: o.islemYonu === 'Gider' ? o.tutar : 0,
+                islemCinsi: `Kasa İşlemi (${o.odemeTipi || 'Nakit'})`,
+                aciklama: o.notlar || "Finansal İşlem",
+                // Gelir (Firmadan tahsilat yaptık) -> Firmanın borcu düştü (Alacağa yazılır)
                 alacak: o.islemYonu === 'Gelir' ? o.tutar : 0,
+                // Gider (Firmaya biz para verdik) -> Firmanın borcu arttı (Borca yazılır)
+                borc: o.islemYonu === 'Gider' ? o.tutar : 0,
             });
         });
 
-        // Tarih sıralama
+        // 🚀 MATEMATİKSEL ŞAHESER:
+        // Önce tarihi ESKİDEN YENİYE sıralayıp bakiyeyi (Yürüyen Bakiye) hatasız hesaplıyoruz
         ekstre.sort((a, b) => new Date(a.tarih) - new Date(b.tarih));
 
-        // Yürüyen Bakiye Hesabı (Doğru Formül)
-        let toplamBorc = 0;
-        let toplamAlacak = 0;
         let bakiyeAkim = 0;
-
         const formatliEkstre = ekstre.map(kalem => {
-            toplamBorc += kalem.borc;
-            toplamAlacak += kalem.alacak;
-            bakiyeAkim = toplamBorc - toplamAlacak; // Her satırda borç - alacak
+            bakiyeAkim += kalem.borc;
+            bakiyeAkim -= kalem.alacak;
             return { ...kalem, yuruyenBakiye: bakiyeAkim };
         });
 
+        // Hesaplama bittikten sonra müşterinin istediği gibi EN YENİ İŞLEM EN ÜSTE gelecek şekilde takla attırıyoruz!
+        formatliEkstre.reverse();
+
         res.json({
             liste: formatliEkstre,
-            toplamBorc,
-            toplamAlacak,
+            toplamBorc: formatliEkstre.reduce((acc, curr) => acc + curr.borc, 0),
+            toplamAlacak: formatliEkstre.reduce((acc, curr) => acc + curr.alacak, 0),
             bakiye: bakiyeAkim
         });
 
@@ -137,5 +133,4 @@ const getCariEkstre = async (req, res) => {
         res.status(500).json({ mesaj: "Ekstre hazırlanamadı", hata: error.message });
     }
 };
-
 module.exports = { cariEkle, cariListele, cariGuncelle, cariSil, getCariEkstre };

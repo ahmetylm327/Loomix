@@ -1,196 +1,186 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Table, Select, Typography, Row, Col, Statistic, Tag, Space, Button } from 'antd';
-import { FileTextOutlined, PrinterOutlined } from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Card, Typography, Table, Button, Space, message, Modal, Tag } from 'antd';
+import { SearchOutlined, FileExcelOutlined, FilePdfOutlined, TeamOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
 const CariHareketleri = () => {
     const [cariler, setCariler] = useState([]);
-    const [selectedCari, setSelectedCari] = useState(null);
-    const [hareketler, setHareketler] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [ozet, setOzet] = useState({ borc: 0, alacak: 0, bakiye: 0 });
+    const [loading, setLoading] = useState(true);
+
+    const [isEkstreVisible, setIsEkstreVisible] = useState(false);
+    const [ekstreData, setEkstreData] = useState([]);
+    const [ekstreOzet, setEkstreOzet] = useState({});
+    const [ekstreLoading, setEkstreLoading] = useState(false);
+    const [seciliCari, setSeciliCari] = useState(null);
 
     useEffect(() => {
         fetchCariler();
     }, []);
 
     const fetchCariler = async () => {
-        try {
-            const res = await axiosInstance.get('/caris');
-            setCariler(res.data);
-        } catch (error) {
-            console.error("Cariler yüklenemedi");
-        }
-    };
-
-    const fetchHareketler = async (cariId) => {
         setLoading(true);
         try {
-            const res = await axiosInstance.get(`/caris/${cariId}/ekstre`);
-            const data = res.data;
-
-            setHareketler(data.liste || []);
-            setOzet({
-                borc: data.toplamBorc || 0,
-                alacak: data.toplamAlacak || 0,
-                bakiye: data.bakiye || 0
-            });
+            const response = await axiosInstance.get('/caris');
+            setCariler(response.data);
         } catch (error) {
-            console.error("Hareketler yüklenemedi");
+            message.error("Firma listesi alınamadı!");
         } finally {
             setLoading(false);
         }
     };
 
-    // YENİ: Mobilde taşmayan, kompakt 3 sütunlu dekont stili
-    const columns = [
+    const handleDetayGor = async (cari) => {
+        setSeciliCari(cari);
+        setIsEkstreVisible(true);
+        setEkstreLoading(true);
+        try {
+            const res = await axiosInstance.get(`/caris/${cari._id}/ekstre`);
+            setEkstreData(res.data.liste);
+            setEkstreOzet({
+                toplamBorc: res.data.toplamBorc,
+                toplamAlacak: res.data.toplamAlacak,
+                bakiye: res.data.bakiye
+            });
+        } catch (error) {
+            message.error("Cari hareketleri alınamadı!");
+        } finally {
+            setEkstreLoading(false);
+        }
+    };
+
+    const exportEkstreExcel = () => {
+        if (!ekstreData || ekstreData.length === 0) return message.warning("Veri yok!");
+        const excelData = ekstreData.map(item => ({
+            "Tarih": dayjs(item.tarih).format('DD.MM.YYYY'),
+            "İşlem Cinsi": item.islemCinsi,
+            "Açıklama": item.aciklama,
+            "Borç (Bize Olan)": item.borc,
+            "Alacak (Ödenen)": item.alacak,
+            "Kalan Bakiye": item.yuruyenBakiye
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Firma_Ekstresi");
+        XLSX.writeFile(workbook, `${seciliCari?.firmaAdi}_Cari_Ekstresi.xlsx`);
+    };
+
+    const exportEkstrePDF = () => {
+        if (!ekstreData || ekstreData.length === 0) return message.warning("Veri yok!");
+        const doc = new jsPDF('p', 'pt', 'a4');
+
+        doc.setFontSize(14);
+        doc.text(`${seciliCari?.firmaAdi} - Cari Hesap Ekstresi`, 40, 40);
+        doc.setFontSize(10);
+        doc.text(`Tarih: ${dayjs().format('DD.MM.YYYY')}`, 40, 55);
+
+        const tableColumn = ["Tarih", "Islem Cinsi", "Aciklama", "Borc (TL)", "Alacak (TL)", "Bakiye"];
+        const tableRows = ekstreData.map(item => [
+            dayjs(item.tarih).format('DD.MM.YYYY'),
+            item.islemCinsi,
+            item.aciklama || '-',
+            item.borc.toLocaleString('tr-TR'),
+            item.alacak.toLocaleString('tr-TR'),
+            item.yuruyenBakiye.toLocaleString('tr-TR')
+        ]);
+
+        autoTable(doc, { head: [tableColumn], body: tableRows, startY: 70, theme: 'grid', headStyles: { fillColor: [24, 144, 255] }, styles: { fontSize: 8 } });
+        doc.save(`${seciliCari?.firmaAdi}_Ekstre.pdf`);
+    };
+
+    const anaTabloColumns = [
         {
-            title: 'İşlem Detayı',
-            key: 'detay',
+            title: 'Firma Bilgisi',
+            key: 'firmaAdi',
             render: (_, record) => (
                 <div>
-                    <b style={{ color: '#1890ff', fontSize: '13px' }}>
-                        {dayjs(record.tarih).format('DD.MM.YYYY')}
-                    </b>
-                    <br />
-                    <Tag
-                        color={record.islemCinsi?.includes('Üretim') ? 'blue' : 'orange'}
-                        style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px', marginTop: 4 }}
-                    >
-                        {record.islemCinsi}
-                    </Tag>
-                    {record.aciklama && (
-                        <div style={{ fontSize: '11px', color: '#595959', fontStyle: 'italic', marginTop: 4 }}>
-                            {record.aciklama}
-                        </div>
-                    )}
+                    <b style={{ fontSize: '15px' }}>{record.firmaAdi}</b><br />
+                    <small style={{ color: '#8c8c8c' }}>{record.kategori || 'Genel'}</small>
                 </div>
             )
         },
+        { title: 'Telefon', dataIndex: 'telefon', render: t => t || '-' },
         {
-            title: 'Tutar',
-            key: 'tutar',
+            title: 'Güncel Bakiye',
+            dataIndex: 'bakiye',
             align: 'right',
-            render: (_, record) => {
-                const borc = record.borc || 0;
-                const alacak = record.alacak || 0;
-
-                if (borc > 0) {
-                    return (
-                        <div>
-                            <Text type="danger" style={{ fontWeight: 'bold', fontSize: '14px' }}>+{borc.toLocaleString()} ₺</Text>
-                            <div style={{ fontSize: '10px', color: '#cf1322' }}>Borç (Alınan İş)</div>
-                        </div>
-                    );
-                } else if (alacak > 0) {
-                    return (
-                        <div>
-                            <Text type="success" style={{ fontWeight: 'bold', fontSize: '14px' }}>-{alacak.toLocaleString()} ₺</Text>
-                            <div style={{ fontSize: '10px', color: '#3f8600' }}>Alacak (Ödeme)</div>
-                        </div>
-                    );
-                } else {
-                    return '-';
-                }
-            }
+            render: val => (
+                <Tag color={val > 0 ? "error" : (val < 0 ? "success" : "default")} style={{ fontSize: '14px', padding: '4px 8px' }}>
+                    {val > 0 ? `Bize Borçlu: ${val.toLocaleString('tr-TR')} ₺` : (val < 0 ? `Bizden Alacaklı: ${Math.abs(val).toLocaleString('tr-TR')} ₺` : 'Bakiye Sıfır')}
+                </Tag>
+            )
         },
         {
-            title: 'Yürüyen Bakiye',
-            dataIndex: 'yuruyenBakiye',
-            key: 'yuruyenBakiye',
-            align: 'right',
-            render: (v) => (
-                <div style={{ background: '#fafafa', padding: '4px', borderRadius: '4px', border: '1px solid #e8e8e8' }}>
-                    <b style={{ color: v > 0 ? '#cf1322' : '#3f8600', fontSize: '14px' }}>
-                        {Math.abs(v).toLocaleString()} ₺
-                    </b>
-                    <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
-                        {v > 0 ? 'Müşteri Borçlu' : 'Müşteri Alacaklı'}
-                    </div>
-                </div>
+            title: 'Aksiyon',
+            key: 'aksiyon',
+            align: 'center',
+            render: (_, record) => (
+                <Button type="primary" icon={<SearchOutlined />} onClick={() => handleDetayGor(record)}>
+                    Detaylı Ekstre
+                </Button>
             )
         }
     ];
 
-    return (
-        <div style={{ padding: '15px', background: '#f0f2f5', minHeight: '100vh', overflowX: 'hidden' }}>
+    const ekstreColumns = [
+        { title: 'Tarih', dataIndex: 'tarih', width: 110, render: val => dayjs(val).format('DD.MM.YYYY') },
+        { title: 'İşlem Cinsi', dataIndex: 'islemCinsi', width: 140, render: val => <b>{val}</b> },
+        { title: 'Açıklama', dataIndex: 'aciklama' },
+        { title: 'Borç (TL)', dataIndex: 'borc', align: 'right', width: 110, render: val => val > 0 ? <Text type="danger">{val.toLocaleString('tr-TR')} ₺</Text> : '-' },
+        { title: 'Alacak (TL)', dataIndex: 'alacak', align: 'right', width: 110, render: val => val > 0 ? <Text type="success">{val.toLocaleString('tr-TR')} ₺</Text> : '-' },
+        { title: 'Bakiye', dataIndex: 'yuruyenBakiye', align: 'right', width: 120, render: val => <b style={{ color: val > 0 ? '#cf1322' : '#000' }}>{val.toLocaleString('tr-TR')} ₺</b> }
+    ];
 
-            {/* Üst Seçim Kartı */}
-            <Card variant="borderless" style={{ marginBottom: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', borderRadius: '8px' }}>
-                {/* YENİ: Mobilde başlık ve arama kutusu alt alta geçer */}
-                <Row gutter={[16, 16]} align="middle">
-                    <Col xs={24} md={12}>
-                        <Title level={4} style={{ margin: 0, color: '#1890ff' }}><FileTextOutlined /> Cari Hareket Föyü</Title>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>Firmanın tüm işlem geçmişi ve ekstresi</Text>
-                    </Col>
-                    <Col xs={24} md={12} style={{ textAlign: 'right' }}>
-                        <Space wrap style={{ width: '100%', justifyContent: 'flex-end' }}>
-                            <Select
-                                showSearch
-                                placeholder="Cari Hesap Seçiniz"
-                                style={{ width: 250 }}
-                                onChange={(val) => {
-                                    setSelectedCari(val);
-                                    fetchHareketler(val);
-                                }}
-                                optionFilterProp="children"
-                            >
-                                {cariler.map(c => <Option key={c._id} value={c._id}>{c.firmaAdi}</Option>)}
-                            </Select>
-                            <Button icon={<PrinterOutlined />} disabled={!selectedCari}>Yazdır</Button>
-                        </Space>
-                    </Col>
-                </Row>
+    return (
+        <div style={{ padding: '20px', background: '#f0f2f5', minHeight: '100vh' }}>
+            <Title level={3} style={{ marginBottom: 20 }}><TeamOutlined /> Müşteri & Tedarikçi Cari Hareketleri</Title>
+
+            <Card variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                <Table columns={anaTabloColumns} dataSource={cariler} loading={loading} rowKey="_id" size="middle" />
             </Card>
 
-            {selectedCari && (
-                <div style={{ animation: 'fadeIn 0.5s' }}>
-                    {/* Özet Kartları: Mobilde alt alta sıralanır */}
-                    <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
-                        <Col xs={24} sm={8}>
-                            <Card variant="borderless" style={{ borderLeft: '4px solid #cf1322', borderRadius: '8px' }}>
-                                <Statistic title="Toplam Borç (Alınan İş)" value={ozet.borc} precision={2} suffix="₺" styles={{ content: { fontSize: '18px' } }} />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={8}>
-                            <Card variant="borderless" style={{ borderLeft: '4px solid #3f8600', borderRadius: '8px' }}>
-                                <Statistic title="Toplam Alacak (Ödeme)" value={ozet.alacak} precision={2} suffix="₺" styles={{ content: { fontSize: '18px' } }} />
-                            </Card>
-                        </Col>
-                        <Col xs={24} sm={8}>
-                            <Card variant="borderless" style={{ background: ozet.bakiye > 0 ? '#fff1f0' : '#f6ffed', border: `1px solid ${ozet.bakiye > 0 ? '#ffa39e' : '#b7eb8f'}`, borderRadius: '8px' }}>
-                                <Statistic
-                                    title="Net Bakiye Durumu"
-                                    value={Math.abs(ozet.bakiye)}
-                                    precision={2}
-                                    suffix="₺"
-                                    styles={{ content: { color: ozet.bakiye > 0 ? '#cf1322' : '#3f8600', fontSize: '20px', fontWeight: 'bold' } }}
-                                />
-                                <div style={{ fontSize: '11px', color: '#8c8c8c', marginTop: '4px' }}>
-                                    {ozet.bakiye > 0 ? "Firma Bize Borçlu" : "Firmaya Borcumuz Var"}
-                                </div>
-                            </Card>
-                        </Col>
-                    </Row>
-
-                    {/* Hareket Tablosu */}
-                    <Card variant="borderless" style={{ borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                        <Table
-                            dataSource={hareketler}
-                            columns={columns}
-                            rowKey={(record, index) => record._id || record.id || index}
-                            loading={loading}
-                            pagination={false}
-                            size="small"
-                            bordered
-                        />
-                    </Card>
-                </div>
-            )}
+            <Modal
+                title={
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: 30 }}>
+                        <span><b style={{ color: '#1890ff' }}>{seciliCari?.firmaAdi}</b> - Detaylı Hesap Ekstresi</span>
+                        <Space>
+                            <Button size="small" icon={<FileExcelOutlined />} style={{ color: '#52c41a', borderColor: '#52c41a' }} onClick={exportEkstreExcel}>Excel</Button>
+                            <Button size="small" type="primary" danger icon={<FilePdfOutlined />} onClick={exportEkstrePDF}>PDF</Button>
+                        </Space>
+                    </div>
+                }
+                open={isEkstreVisible}
+                onCancel={() => setIsEkstreVisible(false)}
+                footer={null}
+                width={950}
+                destroyOnHidden
+            >
+                <Table
+                    columns={ekstreColumns}
+                    dataSource={ekstreData}
+                    rowKey="key"
+                    loading={ekstreLoading}
+                    pagination={{ pageSize: 12 }}
+                    size="small"
+                    bordered
+                    style={{ marginTop: 15 }}
+                    summary={() => (
+                        <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold', fontSize: '14px' }}>
+                            <Table.Summary.Cell index={0} colSpan={3} align="right">GENEL TOPLAM:</Table.Summary.Cell>
+                            <Table.Summary.Cell index={1} align="right"><Text type="danger">{Number(ekstreOzet.toplamBorc || 0).toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={2} align="right"><Text type="success">{Number(ekstreOzet.toplamAlacak || 0).toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                                <span style={{ color: ekstreOzet.bakiye > 0 ? '#cf1322' : '#000' }}>{Number(ekstreOzet.bakiye || 0).toLocaleString('tr-TR')} ₺</span>
+                            </Table.Summary.Cell>
+                        </Table.Summary.Row>
+                    )}
+                />
+            </Modal>
         </div>
     );
 };
