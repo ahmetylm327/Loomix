@@ -157,7 +157,7 @@ const getPersonelEkstre = async (req, res) => {
         if (!PersonelHareket) return res.status(500).json({ mesaj: "Hareket tablosu bulunamadı." });
 
         // 🚀 DÜZELTME: Sıralama 1 yapıldı (Eskiden Yeniye / Kronolojik). Banka defteri gibi akar!
-        const hareketler = await PersonelHareket.find({ personelId: employeeId }).sort({ islemTarihi: 1 });
+        const hareketler = await PersonelHareket.find({ personelId: employeeId }).sort({ islemTarihi: -1 });
         res.status(200).json(hareketler);
     } catch (error) {
         res.status(500).json({ mesaj: "Ekstre çekilemedi", detay: error.message });
