@@ -38,8 +38,23 @@ const KasaDefteri = () => {
             const response = await axiosInstance.get('/payments');
             let islemler = response.data;
 
-            // 🚀 Arayüzdeki bozuk sıralama mantığı silindi. 
-            // Sadece backend'den gelen "En Yeni En Üstte" listesini ekrana basıyoruz.
+            // 🚀 KUSURSUZ SIRALAMA: Dibe atma yok! Her işlem eklenme anına göre en üste çıkar.
+            islemler.sort((a, b) => {
+                const valA = a.odemeTarihi || a.paymentDate;
+                const valB = b.odemeTarihi || b.paymentDate;
+
+                // Eğer iki işlemin de tarihi varsa, tarihe göre sırala
+                if (valA && valB && valA !== valB) {
+                    return dayjs(valB).valueOf() - dayjs(valA).valueOf();
+                }
+
+                // Tarihler aynıysa VEYA eskiyse, MİLİSANİYELİK EKLENME ANINA (_id) bak.
+                // MongoDB ID'leri zaman damgası içerir, yeni eklenen her zaman daha büyüktür ve en üste gelir!
+                const idA = a._id?.toString() || a.transactionId?.toString() || "";
+                const idB = b._id?.toString() || b.transactionId?.toString() || "";
+                return idB.localeCompare(idA);
+            });
+
             setData(islemler);
 
             let gelir = 0;
@@ -63,7 +78,7 @@ const KasaDefteri = () => {
         try {
             const response = await axiosInstance.get('/caris');
             setCariler(response.data);
-        } catch (error) { console.log("Cari listesi alınamadı."); }
+        } catch (error) { }
     };
 
     const fetchPersoneller = async () => {
@@ -72,7 +87,7 @@ const KasaDefteri = () => {
             try { response = await axiosInstance.get('/employees'); }
             catch (e) { response = await axiosInstance.get('/personel'); }
             setPersoneller(response.data);
-        } catch (error) { console.log("Personel listesi alınamadı."); }
+        } catch (error) { }
     };
 
     const handleSave = async (values) => {
@@ -95,7 +110,7 @@ const KasaDefteri = () => {
                 message.success("Kasa işlemi güncellendi.");
             } else {
                 await axiosInstance.post('/payments', payload);
-                message.success("İşlem kasaya başarıyla işlendi.");
+                message.success("İşlem başarıyla eklendi ve ilgili hesaba yansıdı.");
             }
 
             setIsModalVisible(false);
@@ -104,7 +119,7 @@ const KasaDefteri = () => {
             form.resetFields();
             fetchData();
         } catch (error) {
-            message.error(error.response?.data?.description || "Kayıt başarısız! Eksik alanları kontrol edin.");
+            message.error("Kayıt başarısız! Eksik alanları kontrol edin.");
         }
     };
 
@@ -132,22 +147,26 @@ const KasaDefteri = () => {
                 const islemKategori = record.kategori || record.category;
                 const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
 
-                let muhatapAdi = 'Bilinmiyor';
-                let renk = '#1890ff'; // Standart Firma Rengi
+                // 🚀 ESKİ İŞLEMLER İÇİN PROFESYONEL İSİMLENDİRME
+                let muhatapAdi = 'Genel / Muhtelif İşlem';
+                let renk = '#8c8c8c'; // Gri renk
 
-                // Kimin işlemi olduğunu buluyoruz
+                // Muhatap Ayırma Motoru (Şahsi Harcama, Personel, Cari)
                 if (rId === 'SAHSI_HARCAMA') {
                     muhatapAdi = 'Şahsi / Şirket İçi Harcama';
-                    renk = '#cf1322'; // Kırmızı renk
+                    renk = '#cf1322'; // Kırmızı
                 } else if (islemKategori === 'Personel İşlemi (Maaş/Avans)') {
                     const isci = personeller.find(p => p._id === rId);
                     if (isci) {
                         muhatapAdi = isci.adSoyad || isci.isim;
-                        renk = '#faad14'; // Turuncu renk
+                        renk = '#faad14'; // Turuncu
                     }
                 } else {
                     const cari = cariler.find(c => c._id === rId);
-                    if (cari) muhatapAdi = cari.firmaAdi;
+                    if (cari) {
+                        muhatapAdi = cari.firmaAdi;
+                        renk = '#1890ff'; // Mavi
+                    }
                 }
 
                 const tip = record.islemYonu || record.transactionType;
@@ -159,21 +178,13 @@ const KasaDefteri = () => {
                             {muhatapAdi}
                         </b><br />
                         <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                            {dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY')} - {islemKategori || 'Genel'}
+                            {record.odemeTarihi || record.paymentDate ? dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY') : 'Eski Kayıt'} - {islemKategori || 'Genel'}
                         </span>
 
                         {gosterilecekNot && (
                             <div style={{
-                                fontSize: '11px',
-                                color: '#595959',
-                                fontStyle: 'italic',
-                                marginTop: 4,
-                                whiteSpace: 'normal',
-                                wordBreak: 'break-word',
-                                background: '#fafafa',
-                                padding: '4px 6px',
-                                borderRadius: '4px',
-                                borderLeft: '2px solid #d9d9d9'
+                                fontSize: '11px', color: '#595959', fontStyle: 'italic', marginTop: 4, whiteSpace: 'normal',
+                                wordBreak: 'break-word', background: '#fafafa', padding: '4px 6px', borderRadius: '4px', borderLeft: '2px solid #d9d9d9'
                             }}>
                                 {gosterilecekNot}
                             </div>
