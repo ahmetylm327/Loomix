@@ -3,6 +3,9 @@ const Uretim = mongoose.model('Uretim');
 const Urun = mongoose.model('Urun');
 const Cari = mongoose.model('Cari');
 
+// 🚀 YENİ: Kasa defterine otomatik kayıt atmak için Odeme modelini çağırıyoruz
+const Odeme = mongoose.model('Odeme');
+
 const uretimEkle = async (req, res) => {
     try {
         const { productId, cariId, quantity, birimFiyat, entryType, productionDate, notes } = req.body;
@@ -15,13 +18,14 @@ const uretimEkle = async (req, res) => {
 
         // Ekranda girilen özel fiyatı alıyoruz
         const uygulanacakFiyat = birimFiyat !== undefined ? Number(birimFiyat) : (urun.birimFiyat || 0);
+        const islemTutari = uygulanacakFiyat * quantity;
 
-        // 1. FİŞİ KES VE FİYATI MÜHÜRLE (Eski Fişler Koruma Altında)
+        // 1. FİŞİ KES VE FİYATI MÜHÜRLE
         const yeniUretim = new Uretim({
             productId,
             cariId,
             quantity,
-            birimFiyat: uygulanacakFiyat, // O anki fiyat fişe mühürlendi!
+            birimFiyat: uygulanacakFiyat,
             entryType: entryType || "Günlük",
             productionDate,
             notes
@@ -29,12 +33,23 @@ const uretimEkle = async (req, res) => {
         await yeniUretim.save();
 
         // 2. FİRMAYA BORCUNU YAZ
-        const islemTutari = uygulanacakFiyat * quantity;
         cari.bakiye = (cari.bakiye || 0) + islemTutari;
         await cari.save();
 
-        // 3. 🚀 SİHİRLİ DOKUNUŞ: ÜRÜNÜN KALICI FİYATINI GÜNCELLE!
-        // Eğer patron fiş keserken fiyatı değiştirdiyse, sistem bunu anlar ve "Ürünler" tablosuna zam/indirim uygular.
+        // 3. 🚀 MÜŞTERİNİN İSTEDİĞİ TEK DEFTER MANTIĞI: KASAYA OTOMATİK GİDER YAZ!
+        // Üretim fişi kesildiği an, kasadan bunu bir ödeme (mahsup) gibi düşüyoruz.
+        const yeniOdeme = new Odeme({
+            islemYonu: 'Gider', // Kasadan eksi olarak yansır
+            odemeTipi: 'Nakit', // Varsayılan değer
+            tutar: islemTutari,
+            kategori: 'Firma (Cari) İşlemi',
+            ilgiliId: cariId,
+            odemeTarihi: productionDate || Date.now(),
+            notlar: `Otomatik Mahsup (Fiş): ${urun.urunAdi} - ${quantity} Adet. ${notes || ''}`
+        });
+        await yeniOdeme.save();
+
+        // 4. ÜRÜNÜN KALICI FİYATINI GÜNCELLE
         if (uygulanacakFiyat !== urun.birimFiyat) {
             urun.birimFiyat = uygulanacakFiyat;
             await urun.save();
@@ -42,7 +57,7 @@ const uretimEkle = async (req, res) => {
         }
 
         res.status(201).json({
-            status: "Üretim başarıyla işlendi.",
+            status: "Üretim başarıyla işlendi ve Kasaya otomatik yansıtıldı.",
             productionId: yeniUretim._id,
             guncelBakiye: cari.bakiye
         });
@@ -76,19 +91,28 @@ const uretimSil = async (req, res) => {
     try {
         const id = req.params.id;
 
-        // 🚀 1. Adım: Silinmeden önce fişi bul ve kime kesildiğine bak
+        // 1. Adım: Silinmeden önce fişi bul ve kime kesildiğine bak
         const silinecekUretim = await Uretim.findById(id);
         if (!silinecekUretim) return res.status(404).json({ mesaj: "Üretim kaydı bulunamadı." });
 
-        // 🚀 2. Adım: Kutsal İade! Fiş kime kesildiyse git borcundan düş.
+        const iptalTutari = silinecekUretim.quantity * (silinecekUretim.birimFiyat || 0);
+
+        // 2. Adım: Fiş kime kesildiyse git borcundan düş.
         const cari = await Cari.findById(silinecekUretim.cariId);
         if (cari) {
-            const iptalTutari = silinecekUretim.quantity * (silinecekUretim.birimFiyat || 0);
             cari.bakiye = (cari.bakiye || 0) - iptalTutari;
             await cari.save();
         }
 
-        // 3. Adım: Fişi kalıcı olarak sil
+        // 🚀 3. Adım: KASADAN SİL! Otomatik attığımız o fiş kaydını bulup kasadan temizliyoruz
+        await Odeme.findOneAndDelete({
+            ilgiliId: silinecekUretim.cariId,
+            tutar: iptalTutari,
+            islemYonu: 'Gider',
+            notlar: { $regex: /Otomatik Mahsup/i }
+        });
+
+        // 4. Adım: Fişi kalıcı olarak sil
         await Uretim.findByIdAndDelete(id);
         res.status(204).send();
     } catch (hata) {
