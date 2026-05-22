@@ -38,18 +38,29 @@ const KasaDefteri = () => {
             const response = await axiosInstance.get('/payments');
             let islemler = response.data;
 
-            // 🚀 KUSURSUZ SIRALAMA: Dibe atma yok! Her işlem eklenme anına göre en üste çıkar.
-            islemler.sort((a, b) => {
-                const valA = a.odemeTarihi || a.paymentDate;
-                const valB = b.odemeTarihi || b.paymentDate;
-
-                // Eğer iki işlemin de tarihi varsa, tarihe göre sırala
-                if (valA && valB && valA !== valB) {
-                    return dayjs(valB).valueOf() - dayjs(valA).valueOf();
+            // 🚀 ZAMAN MAKİNESİ: Tarihi olmayanların gerçek eklenme anını MongoDB ID'sinden bulup çıkartıyoruz!
+            islemler = islemler.map(islem => {
+                if (!islem.odemeTarihi && !islem.paymentDate) {
+                    if (islem.createdAt) {
+                        islem.odemeTarihi = islem.createdAt;
+                    } else if (islem._id) {
+                        // MongoDB ID'sinin ilk 8 karakteri, saniye cinsinden oluşturulma tarihidir.
+                        const timestamp = parseInt(islem._id.toString().substring(0, 8), 16) * 1000;
+                        islem.odemeTarihi = new Date(timestamp).toISOString();
+                    } else {
+                        islem.odemeTarihi = new Date().toISOString();
+                    }
                 }
+                return islem;
+            });
 
-                // Tarihler aynıysa VEYA eskiyse, MİLİSANİYELİK EKLENME ANINA (_id) bak.
-                // MongoDB ID'leri zaman damgası içerir, yeni eklenen her zaman daha büyüktür ve en üste gelir!
+            // 🚀 ADİL SIRALAMA: Artık herkesin bir tarihi var. Doğrudan tarihe göre en yeni en üstte olacak şekilde diziyoruz.
+            islemler.sort((a, b) => {
+                const dateA = dayjs(a.odemeTarihi || a.paymentDate).valueOf();
+                const dateB = dayjs(b.odemeTarihi || b.paymentDate).valueOf();
+
+                if (dateA !== dateB) return dateB - dateA;
+
                 const idA = a._id?.toString() || a.transactionId?.toString() || "";
                 const idB = b._id?.toString() || b.transactionId?.toString() || "";
                 return idB.localeCompare(idA);
@@ -147,25 +158,23 @@ const KasaDefteri = () => {
                 const islemKategori = record.kategori || record.category;
                 const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
 
-                // 🚀 ESKİ İŞLEMLER İÇİN PROFESYONEL İSİMLENDİRME
                 let muhatapAdi = 'Genel / Muhtelif İşlem';
-                let renk = '#8c8c8c'; // Gri renk
+                let renk = '#8c8c8c';
 
-                // Muhatap Ayırma Motoru (Şahsi Harcama, Personel, Cari)
                 if (rId === 'SAHSI_HARCAMA') {
                     muhatapAdi = 'Şahsi / Şirket İçi Harcama';
-                    renk = '#cf1322'; // Kırmızı
+                    renk = '#cf1322';
                 } else if (islemKategori === 'Personel İşlemi (Maaş/Avans)') {
                     const isci = personeller.find(p => p._id === rId);
                     if (isci) {
                         muhatapAdi = isci.adSoyad || isci.isim;
-                        renk = '#faad14'; // Turuncu
+                        renk = '#faad14';
                     }
                 } else {
                     const cari = cariler.find(c => c._id === rId);
                     if (cari) {
                         muhatapAdi = cari.firmaAdi;
-                        renk = '#1890ff'; // Mavi
+                        renk = '#1890ff';
                     }
                 }
 
@@ -178,7 +187,8 @@ const KasaDefteri = () => {
                             {muhatapAdi}
                         </b><br />
                         <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                            {record.odemeTarihi || record.paymentDate ? dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY') : 'Eski Kayıt'} - {islemKategori || 'Genel'}
+                            {/* 🚀 Tarihi olmayanlara atadığımız gerçek MongoDB kayıt tarihi burada görünecek! */}
+                            {dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY')} - {islemKategori || 'Genel'}
                         </span>
 
                         {gosterilecekNot && (
@@ -353,7 +363,6 @@ const KasaDefteri = () => {
                         </Select>
                     </Form.Item>
 
-                    {/* 🚀 ZORUNLU MUHATAP SEÇİMİ (ŞAHSI HARCAMA İLE) */}
                     <Form.Item name="relatedId" label="İşlemin Muhatabı (Kiminle Yapıldı?)" rules={[{ required: true, message: 'Lütfen işlemin kime ait olduğunu seçiniz!' }]}>
                         <Select showSearch placeholder="Listedeki muhatabı seçin..." size="large" allowClear optionFilterProp="children">
                             {seciliKategori === 'Personel İşlemi (Maaş/Avans)'
