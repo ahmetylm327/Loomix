@@ -38,21 +38,22 @@ const KasaDefteri = () => {
             const response = await axiosInstance.get('/payments');
             let islemler = response.data;
 
-            // 🚀 SADE VE KUSURSUZ SIRALAMA ALGORİTMASI (Hiçbir işlemi dibe atmadan!)
+            // 🚀 NİHAİ ÇÖZÜM: "Saat/Dakika" farkından doğan Bug giderildi!
             islemler.sort((a, b) => {
-                // 1. Tarihleri al (Tarih yoksa 0 kabul et)
-                const timeA = new Date(a.odemeTarihi || a.paymentDate || 0).getTime();
-                const timeB = new Date(b.odemeTarihi || b.paymentDate || 0).getTime();
+                const dateA = a.odemeTarihi || a.paymentDate;
+                const dateB = b.odemeTarihi || b.paymentDate;
 
-                const gecerliTimeA = isNaN(timeA) ? 0 : timeA;
-                const gecerliTimeB = isNaN(timeB) ? 0 : timeB;
+                // 1. Her iki tarihi de alıp, saat/dakika kısmını sıfırlıyoruz. Sadece GÜN bazında yarıştırıyoruz.
+                const dayA = dateA ? dayjs(dateA).startOf('day').valueOf() : 0;
+                const dayB = dateB ? dayjs(dateB).startOf('day').valueOf() : 0;
 
-                // 2. Önce kesinlikle TARİHE göre sırala (Yeni tarih her zaman en üstte)
-                if (gecerliTimeB !== gecerliTimeA) {
-                    return gecerliTimeB - gecerliTimeA;
+                // 2. Eğer günler farklıysa, yeni gün her zaman en üstte olur.
+                if (dayA !== dayB) {
+                    return dayB - dayA;
                 }
 
-                // 3. Eğer işlemler AYNI GÜN yapıldıysa, veritabanına EN SON eklenen en üste gelsin!
+                // 3. Eğer iki işlem de AYNI GÜN girildiyse (Saatlere bakmaksızın);
+                // MongoDB'deki kayıt olma sırasına (_id) göre EN SON KAYDEDİLENİ en üste atıyoruz!
                 const idA = a._id?.toString() || a.transactionId?.toString() || "";
                 const idB = b._id?.toString() || b.transactionId?.toString() || "";
                 return idB.localeCompare(idA);
@@ -179,7 +180,6 @@ const KasaDefteri = () => {
                             {muhatapAdi}
                         </b><br />
                         <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                            {/* Temiz ve sade tarih gösterimi */}
                             {record.odemeTarihi || record.paymentDate ? dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY') : '-'} - {islemKategori || 'Genel'}
                         </span>
 
