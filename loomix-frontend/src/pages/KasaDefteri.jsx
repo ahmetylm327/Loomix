@@ -38,39 +38,21 @@ const KasaDefteri = () => {
             const response = await axiosInstance.get('/payments');
             let islemler = response.data;
 
-            // 🚀 MUTLAK VE KUSURSUZ SIRALAMA ALGORİTMASI
-            islemler = islemler.map(islem => {
-                let gercekTarih = 0;
-
-                // 1. Kullanıcının girdiği geçerli bir tarih var mı?
-                if (islem.odemeTarihi && dayjs(islem.odemeTarihi).isValid()) {
-                    gercekTarih = dayjs(islem.odemeTarihi).valueOf();
-                }
-                else if (islem.paymentDate && dayjs(islem.paymentDate).isValid()) {
-                    gercekTarih = dayjs(islem.paymentDate).valueOf();
-                }
-                else if (islem.createdAt && dayjs(islem.createdAt).isValid()) {
-                    gercekTarih = dayjs(islem.createdAt).valueOf();
-                }
-                // 2. Tarih yoksa MongoDB ID'sinin içindeki yaratılma anını (Saniye bazında) söküp çıkarıyoruz!
-                else {
-                    const id = islem._id?.toString() || islem.transactionId?.toString() || "";
-                    if (id.length === 24) {
-                        gercekTarih = parseInt(id.substring(0, 8), 16) * 1000;
-                    }
-                }
-
-                // Sıralama ve ekranda göstermek için bu net tarihi objeye mühürlüyoruz
-                islem.gercekMilisaniye = gercekTarih;
-                return islem;
-            });
-
-            // 3. Artık herkesin şaşmaz bir zaman damgası var. Yeniden Eskiye sıralıyoruz!
+            // 🚀 SADE VE KUSURSUZ SIRALAMA ALGORİTMASI (Hiçbir işlemi dibe atmadan!)
             islemler.sort((a, b) => {
-                if (b.gercekMilisaniye !== a.gercekMilisaniye) {
-                    return b.gercekMilisaniye - a.gercekMilisaniye;
+                // 1. Tarihleri al (Tarih yoksa 0 kabul et)
+                const timeA = new Date(a.odemeTarihi || a.paymentDate || 0).getTime();
+                const timeB = new Date(b.odemeTarihi || b.paymentDate || 0).getTime();
+
+                const gecerliTimeA = isNaN(timeA) ? 0 : timeA;
+                const gecerliTimeB = isNaN(timeB) ? 0 : timeB;
+
+                // 2. Önce kesinlikle TARİHE göre sırala (Yeni tarih her zaman en üstte)
+                if (gecerliTimeB !== gecerliTimeA) {
+                    return gecerliTimeB - gecerliTimeA;
                 }
-                // Aynı milisaniyede eklendilerse ID'ye göre son eklenen üste
+
+                // 3. Eğer işlemler AYNI GÜN yapıldıysa, veritabanına EN SON eklenen en üste gelsin!
                 const idA = a._id?.toString() || a.transactionId?.toString() || "";
                 const idB = b._id?.toString() || b.transactionId?.toString() || "";
                 return idB.localeCompare(idA);
@@ -197,8 +179,8 @@ const KasaDefteri = () => {
                             {muhatapAdi}
                         </b><br />
                         <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                            {/* 🚀 Ekranda da o bulduğumuz KESİN tarihi gösteriyoruz! */}
-                            {record.gercekMilisaniye ? dayjs(record.gercekMilisaniye).format('DD.MM.YYYY') : 'Tarih Yok'} - {islemKategori || 'Genel'}
+                            {/* Temiz ve sade tarih gösterimi */}
+                            {record.odemeTarihi || record.paymentDate ? dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY') : '-'} - {islemKategori || 'Genel'}
                         </span>
 
                         {gosterilecekNot && (
@@ -255,7 +237,7 @@ const KasaDefteri = () => {
                                 tutar: record.tutar || record.amount,
                                 kategori: currentCat,
                                 odemeTipi: record.odemeTipi || record.paymentType,
-                                odemeTarihi: dayjs(record.gercekMilisaniye), // 🚀 Düzenlerken de gerçek tarihi getir
+                                odemeTarihi: dayjs(record.odemeTarihi || record.paymentDate),
                                 relatedId: record.relatedId?._id || record.relatedId,
                                 notlar: record.notlar || record.notes || record.aciklama
                             });
