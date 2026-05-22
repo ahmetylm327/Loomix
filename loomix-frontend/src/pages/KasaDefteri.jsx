@@ -38,29 +38,39 @@ const KasaDefteri = () => {
             const response = await axiosInstance.get('/payments');
             let islemler = response.data;
 
-            // 🚀 ZAMAN MAKİNESİ: Tarihi olmayanların gerçek eklenme anını MongoDB ID'sinden bulup çıkartıyoruz!
+            // 🚀 MUTLAK VE KUSURSUZ SIRALAMA ALGORİTMASI
             islemler = islemler.map(islem => {
-                if (!islem.odemeTarihi && !islem.paymentDate) {
-                    if (islem.createdAt) {
-                        islem.odemeTarihi = islem.createdAt;
-                    } else if (islem._id) {
-                        // MongoDB ID'sinin ilk 8 karakteri, saniye cinsinden oluşturulma tarihidir.
-                        const timestamp = parseInt(islem._id.toString().substring(0, 8), 16) * 1000;
-                        islem.odemeTarihi = new Date(timestamp).toISOString();
-                    } else {
-                        islem.odemeTarihi = new Date().toISOString();
+                let gercekTarih = 0;
+
+                // 1. Kullanıcının girdiği geçerli bir tarih var mı?
+                if (islem.odemeTarihi && dayjs(islem.odemeTarihi).isValid()) {
+                    gercekTarih = dayjs(islem.odemeTarihi).valueOf();
+                }
+                else if (islem.paymentDate && dayjs(islem.paymentDate).isValid()) {
+                    gercekTarih = dayjs(islem.paymentDate).valueOf();
+                }
+                else if (islem.createdAt && dayjs(islem.createdAt).isValid()) {
+                    gercekTarih = dayjs(islem.createdAt).valueOf();
+                }
+                // 2. Tarih yoksa MongoDB ID'sinin içindeki yaratılma anını (Saniye bazında) söküp çıkarıyoruz!
+                else {
+                    const id = islem._id?.toString() || islem.transactionId?.toString() || "";
+                    if (id.length === 24) {
+                        gercekTarih = parseInt(id.substring(0, 8), 16) * 1000;
                     }
                 }
+
+                // Sıralama ve ekranda göstermek için bu net tarihi objeye mühürlüyoruz
+                islem.gercekMilisaniye = gercekTarih;
                 return islem;
             });
 
-            // 🚀 ADİL SIRALAMA: Artık herkesin bir tarihi var. Doğrudan tarihe göre en yeni en üstte olacak şekilde diziyoruz.
+            // 3. Artık herkesin şaşmaz bir zaman damgası var. Yeniden Eskiye sıralıyoruz!
             islemler.sort((a, b) => {
-                const dateA = dayjs(a.odemeTarihi || a.paymentDate).valueOf();
-                const dateB = dayjs(b.odemeTarihi || b.paymentDate).valueOf();
-
-                if (dateA !== dateB) return dateB - dateA;
-
+                if (b.gercekMilisaniye !== a.gercekMilisaniye) {
+                    return b.gercekMilisaniye - a.gercekMilisaniye;
+                }
+                // Aynı milisaniyede eklendilerse ID'ye göre son eklenen üste
                 const idA = a._id?.toString() || a.transactionId?.toString() || "";
                 const idB = b._id?.toString() || b.transactionId?.toString() || "";
                 return idB.localeCompare(idA);
@@ -187,8 +197,8 @@ const KasaDefteri = () => {
                             {muhatapAdi}
                         </b><br />
                         <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                            {/* 🚀 Tarihi olmayanlara atadığımız gerçek MongoDB kayıt tarihi burada görünecek! */}
-                            {dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY')} - {islemKategori || 'Genel'}
+                            {/* 🚀 Ekranda da o bulduğumuz KESİN tarihi gösteriyoruz! */}
+                            {record.gercekMilisaniye ? dayjs(record.gercekMilisaniye).format('DD.MM.YYYY') : 'Tarih Yok'} - {islemKategori || 'Genel'}
                         </span>
 
                         {gosterilecekNot && (
@@ -245,7 +255,7 @@ const KasaDefteri = () => {
                                 tutar: record.tutar || record.amount,
                                 kategori: currentCat,
                                 odemeTipi: record.odemeTipi || record.paymentType,
-                                odemeTarihi: dayjs(record.odemeTarihi || record.paymentDate),
+                                odemeTarihi: dayjs(record.gercekMilisaniye), // 🚀 Düzenlerken de gerçek tarihi getir
                                 relatedId: record.relatedId?._id || record.relatedId,
                                 notlar: record.notlar || record.notes || record.aciklama
                             });
