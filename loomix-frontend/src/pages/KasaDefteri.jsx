@@ -38,17 +38,8 @@ const KasaDefteri = () => {
             const response = await axiosInstance.get('/payments');
             let islemler = response.data;
 
-            // 🚀 MİLİSANİYELİK KUSURSUZ SIRALAMA
-            islemler.sort((a, b) => {
-                const dateA = dayjs(a.odemeTarihi || a.paymentDate).valueOf();
-                const dateB = dayjs(b.odemeTarihi || b.paymentDate).valueOf();
-                if (dateB !== dateA) return dateB - dateA;
-
-                const idA = a._id || a.transactionId || "";
-                const idB = b._id || b.transactionId || "";
-                return idB.localeCompare(idA);
-            });
-
+            // 🚀 Arayüzdeki bozuk sıralama mantığı silindi. 
+            // Sadece backend'den gelen "En Yeni En Üstte" listesini ekrana basıyoruz.
             setData(islemler);
 
             let gelir = 0;

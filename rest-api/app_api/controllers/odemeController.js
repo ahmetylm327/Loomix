@@ -107,9 +107,9 @@ const odemeEkle = async (req, res) => {
 
 const odemeListele = async (req, res) => {
     try {
-        const odemeler = await Odeme.find().sort({ odemeTarihi: -1, createdAt: -1 });
+        // 🚀 KUSURSUZ SIRALAMA: Önce tarihe göre, aynı günse eklendiği saniyeye (_id) göre EN YENİ EN ÜSTTE!
+        const odemeler = await Odeme.find().sort({ odemeTarihi: -1, _id: -1 });
 
-        // 🚀 DÜZELTME: Formatlayarak yollama yapısı geri geldi
         const formatliOdemeler = odemeler.map(odeme => ({
             transactionId: odeme._id,
             transactionType: odeme.islemYonu,
@@ -133,7 +133,6 @@ const odemeListele = async (req, res) => {
         res.status(500).json({ mesaj: "Ödemeler listelenemedi", detay: hata.message });
     }
 };
-
 const odemeGuncelle = async (req, res) => {
     try {
         const id = req.params.id;
