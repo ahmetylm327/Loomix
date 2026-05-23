@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const Uretim = mongoose.model('Uretim');
 const Urun = mongoose.model('Urun');
 const Cari = mongoose.model('Cari');
-const Odeme = mongoose.model('Odeme');
 
 const uretimEkle = async (req, res) => {
     try {
@@ -29,24 +28,12 @@ const uretimEkle = async (req, res) => {
         });
         await yeniUretim.save();
 
-        // 2. 🚀 FİRMAYA BORCUNU YAZ (+ Eklendiği için Firmanın Bize Olan Borcu Kesin Olarak Artar)
+        // 2. FİRMAYA BORCUNU YAZ (SADECE CARİ BAKİYESİ ARTAR, KASAYA DOKUNMAZ)
         cari.bakiye = (cari.bakiye || 0) + islemTutari;
         await cari.save();
 
-        // 3. KASAYA OTOMATİK GİDER YAZ (Kasa defterinden düşmesi için)
-        const yeniOdeme = new Odeme({
-            islemYonu: 'Gider',
-            odemeTipi: 'Nakit',
-            tutar: islemTutari,
-            kategori: 'Firma (Cari) İşlemi',
-            ilgiliId: cariId,
-            odemeTarihi: productionDate || Date.now(),
-            notlar: `Otomatik Mahsup (Fiş): ${urun.urunAdi} - ${quantity} Adet. ${notes || ''}`
-        });
-        await yeniOdeme.save();
-
         res.status(201).json({
-            status: "Üretim başarıyla işlendi ve Kasaya otomatik yansıtıldı.",
+            status: "Üretim başarıyla işlendi.",
             productionId: yeniUretim._id,
             guncelBakiye: cari.bakiye
         });
@@ -89,13 +76,6 @@ const uretimSil = async (req, res) => {
             cari.bakiye = (cari.bakiye || 0) - iptalTutari;
             await cari.save();
         }
-
-        await Odeme.findOneAndDelete({
-            ilgiliId: silinecekUretim.cariId,
-            tutar: iptalTutari,
-            islemYonu: 'Gider',
-            notlar: { $regex: /Otomatik Mahsup/i }
-        });
 
         await Uretim.findByIdAndDelete(id);
         res.status(204).send();

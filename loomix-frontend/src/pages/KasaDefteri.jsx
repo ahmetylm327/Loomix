@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import {
     Table, Card, Typography, Button, Modal, Form, Select,
     InputNumber, DatePicker, Input, message, Tag, Row, Col,
-    Statistic, Space, Dropdown
+    Statistic, Space, Dropdown, Tabs
 } from 'antd';
 import {
     PlusOutlined, WalletOutlined, ArrowUpOutlined,
-    ArrowDownOutlined, EditOutlined, DeleteOutlined, MoreOutlined
+    ArrowDownOutlined, EditOutlined, DeleteOutlined, MoreOutlined,
+    FileTextOutlined, GlobalOutlined
 } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
@@ -16,14 +17,18 @@ const { Option } = Select;
 const { confirm } = Modal;
 
 const KasaDefteri = () => {
-    const [data, setData] = useState([]);
+    // 🚀 3 FARKLI LİSTE İÇİN STATE'LER
+    const [kasaData, setKasaData] = useState([]);
+    const [uretimData, setUretimData] = useState([]);
+    const [konsolideData, setKonsolideData] = useState([]);
+
     const [cariler, setCariler] = useState([]);
     const [personeller, setPersoneller] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
     const [editingOdeme, setEditingOdeme] = useState(null);
-    const [stats, setStats] = useState({ toplamGelir: 0, toplamGider: 0, netBakiye: 0 });
+    const [stats, setStats] = useState({ toplamGelir: 0, toplamGider: 0, netBakiye: 0, toplamAlacak: 0 });
     const [seciliKategori, setSeciliKategori] = useState('');
 
     useEffect(() => {
@@ -35,44 +40,75 @@ const KasaDefteri = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const response = await axiosInstance.get('/payments');
-            let islemler = response.data;
+            // 🚀 HEM KASAYI HEM FİŞLERİ AYNI ANDA ÇEKİYORUZ
+            // (Not: Eğer backend'de fişleri listeleme linkin /uretimler ise aşağıdaki '/uretim' kısmını '/uretimler' yapabilirsin)
+            const [kasaRes, uretimRes] = await Promise.all([
+                axiosInstance.get('/payments'),
+                axiosInstance.get('/uretim').catch(() => ({ data: [] })) // Hata verirse boş liste dönsün
+            ]);
 
-            // 🚀 NİHAİ ÇÖZÜM: "Saat/Dakika" farkından doğan Bug giderildi!
-            islemler.sort((a, b) => {
-                const dateA = a.odemeTarihi || a.paymentDate;
-                const dateB = b.odemeTarihi || b.paymentDate;
+            let kasalar = kasaRes.data;
+            let uretimler = uretimRes.data;
 
-                // 1. Her iki tarihi de alıp, saat/dakika kısmını sıfırlıyoruz. Sadece GÜN bazında yarıştırıyoruz.
-                const dayA = dateA ? dayjs(dateA).startOf('day').valueOf() : 0;
-                const dayB = dateB ? dayjs(dateB).startOf('day').valueOf() : 0;
-
-                // 2. Eğer günler farklıysa, yeni gün her zaman en üstte olur.
-                if (dayA !== dayB) {
-                    return dayB - dayA;
-                }
-
-                // 3. Eğer iki işlem de AYNI GÜN girildiyse (Saatlere bakmaksızın);
-                // MongoDB'deki kayıt olma sırasına (_id) göre EN SON KAYDEDİLENİ en üste atıyoruz!
-                const idA = a._id?.toString() || a.transactionId?.toString() || "";
-                const idB = b._id?.toString() || b.transactionId?.toString() || "";
-                return idB.localeCompare(idA);
-            });
-
-            setData(islemler);
-
+            // 1. Kasa İstatistikleri ve Formatlaması
             let gelir = 0;
             let gider = 0;
-            islemler.forEach(islem => {
+            kasalar = kasalar.map(k => ({ ...k, islemTuru: 'Kasa' }));
+            kasalar.forEach(islem => {
                 const tutarVal = Number(islem.tutar || islem.amount) || 0;
                 const yon = islem.islemYonu || islem.transactionType;
                 if (yon === 'Gelir') gelir += tutarVal;
                 else if (yon === 'Gider') gider += tutarVal;
             });
 
-            setStats({ toplamGelir: gelir, toplamGider: gider, netBakiye: gelir - gider });
+            // 2. Üretim (Fiş/Alacak) İstatistikleri ve Formatlaması
+            let alacak = 0;
+            let formatliUretimler = uretimler.map(u => {
+                const uTutar = (u.quantity || 0) * (u.birimFiyat || 0);
+                alacak += uTutar;
+                return {
+                    ...u,
+                    _id: u._id,
+                    islemTuru: 'Uretim', // Tabloda ayırt etmek için mühür
+                    tutar: uTutar,
+                    islemYonu: 'Alacak',
+                    odemeTarihi: u.productionDate,
+                    kategori: 'Üretim / Fiş Kesimi'
+                };
+            });
+
+            // 3. KONSOLİDE (BİRLEŞTİRİLMİŞ) LİSTE
+            let birlesikListe = [...kasalar, ...formatliUretimler];
+
+            // 🚀 NİHAİ ÇÖZÜM: Saat/Dakika farkından doğan Bug giderildi (Tüm listelere uygulanır)
+            const siralamaAlgoritmasi = (a, b) => {
+                const dateA = a.odemeTarihi || a.paymentDate;
+                const dateB = b.odemeTarihi || b.paymentDate;
+
+                const dayA = dateA ? dayjs(dateA).startOf('day').valueOf() : 0;
+                const dayB = dateB ? dayjs(dateB).startOf('day').valueOf() : 0;
+
+                if (dayA !== dayB) {
+                    return dayB - dayA;
+                }
+
+                const idA = a._id?.toString() || a.transactionId?.toString() || "";
+                const idB = b._id?.toString() || b.transactionId?.toString() || "";
+                return idB.localeCompare(idA);
+            };
+
+            kasalar.sort(siralamaAlgoritmasi);
+            formatliUretimler.sort(siralamaAlgoritmasi);
+            birlesikListe.sort(siralamaAlgoritmasi);
+
+            // Verileri state'e bas
+            setKasaData(kasalar);
+            setUretimData(formatliUretimler);
+            setKonsolideData(birlesikListe);
+            setStats({ toplamGelir: gelir, toplamGider: gider, netBakiye: gelir - gider, toplamAlacak: alacak });
+
         } catch (error) {
-            message.error("Kasa hareketleri yüklenemedi!");
+            message.error("Veriler tam olarak yüklenemedi!");
         } finally {
             setLoading(false);
         }
@@ -127,7 +163,13 @@ const KasaDefteri = () => {
         }
     };
 
-    const showDeleteConfirm = (id) => {
+    const showDeleteConfirm = (id, islemTuru) => {
+        // 🚀 KORUMA: Fişler Kasa ekranından silinemez!
+        if (islemTuru === 'Uretim') {
+            message.warning("Fiş iptal işlemleri sadece 'Üretimler / Fişler' sayfasından yapılabilir!");
+            return;
+        }
+
         confirm({
             title: 'Kasa İşlemini Sil',
             content: 'Bu işlemi silerseniz hesap bakiyeleri (Firma/Personel) tersine dönecektir! Emin misiniz?',
@@ -149,25 +191,28 @@ const KasaDefteri = () => {
             key: 'detay',
             render: (_, record) => {
                 const islemKategori = record.kategori || record.category;
-                const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
 
                 let muhatapAdi = 'Genel / Muhtelif İşlem';
                 let renk = '#8c8c8c';
 
-                if (rId === 'SAHSI_HARCAMA') {
-                    muhatapAdi = 'Şahsi / Şirket İçi Harcama';
-                    renk = '#cf1322';
-                } else if (islemKategori === 'Personel İşlemi (Maaş/Avans)') {
-                    const isci = personeller.find(p => p._id === rId);
-                    if (isci) {
-                        muhatapAdi = isci.adSoyad || isci.isim;
-                        renk = '#faad14';
-                    }
+                // 🚀 MUHATAP AYIRMA (Fiş mi, Kasa mı?)
+                if (record.islemTuru === 'Uretim') {
+                    // Üretim Fişiyse Backend populate yapmış olabilir
+                    const cariAdi = record.cariId?.firmaAdi || cariler.find(c => c._id === record.cariId)?.firmaAdi;
+                    muhatapAdi = cariAdi || 'Bilinmeyen Firma';
+                    renk = '#722ed1'; // Fişler için MOR renk
                 } else {
-                    const cari = cariler.find(c => c._id === rId);
-                    if (cari) {
-                        muhatapAdi = cari.firmaAdi;
-                        renk = '#1890ff';
+                    // Normal Kasa İşlemiyse
+                    const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
+                    if (rId === 'SAHSI_HARCAMA') {
+                        muhatapAdi = 'Şahsi / Şirket İçi Harcama';
+                        renk = '#cf1322';
+                    } else if (islemKategori === 'Personel İşlemi (Maaş/Avans)') {
+                        const isci = personeller.find(p => p._id === rId);
+                        if (isci) { muhatapAdi = isci.adSoyad || isci.isim; renk = '#faad14'; }
+                    } else {
+                        const cari = cariler.find(c => c._id === rId);
+                        if (cari) { muhatapAdi = cari.firmaAdi; renk = '#1890ff'; }
                     }
                 }
 
@@ -193,9 +238,15 @@ const KasaDefteri = () => {
                         )}
 
                         <div style={{ marginTop: 6 }}>
-                            <Tag color={tip === 'Gelir' ? 'success' : 'error'} icon={tip === 'Gelir' ? <ArrowUpOutlined /> : <ArrowDownOutlined />} style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px' }}>
-                                {tip === 'Gelir' ? 'TAHSİLAT' : 'ÖDEME'}
-                            </Tag>
+                            {record.islemTuru === 'Uretim' ? (
+                                <Tag color="purple" icon={<FileTextOutlined />} style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px' }}>
+                                    KESİLEN FİŞ (ALACAK)
+                                </Tag>
+                            ) : (
+                                <Tag color={tip === 'Gelir' ? 'success' : 'error'} icon={tip === 'Gelir' ? <ArrowUpOutlined /> : <ArrowDownOutlined />} style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px' }}>
+                                    {tip === 'Gelir' ? 'TAHSİLAT (KASA)' : 'ÖDEME (KASA)'}
+                                </Tag>
+                            )}
                         </div>
                     </div>
                 );
@@ -208,9 +259,17 @@ const KasaDefteri = () => {
             render: (_, record) => {
                 const tutarVal = record.tutar || record.amount;
                 const tip = record.islemYonu || record.transactionType;
+
+                let mRenk = '#595959';
+                let isaret = '';
+
+                if (record.islemTuru === 'Uretim') { mRenk = '#722ed1'; isaret = '+'; }
+                else if (tip === 'Gelir') { mRenk = '#52c41a'; isaret = '+'; }
+                else if (tip === 'Gider') { mRenk = '#ff4d4f'; isaret = '-'; }
+
                 return (
-                    <b style={{ color: tip === 'Gelir' ? '#52c41a' : '#ff4d4f', fontSize: '15px' }}>
-                        {tip === 'Gelir' ? '+' : '-'}{tutarVal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                    <b style={{ color: mRenk, fontSize: '15px' }}>
+                        {isaret}{tutarVal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
                     </b>
                 );
             }
@@ -221,6 +280,9 @@ const KasaDefteri = () => {
             width: 50,
             align: 'right',
             render: (_, record) => {
+                // 🚀 Üretim Fişiyse menü çıkarma!
+                if (record.islemTuru === 'Uretim') return null;
+
                 const items = [
                     {
                         key: '1',
@@ -250,7 +312,7 @@ const KasaDefteri = () => {
                         label: 'Sil',
                         icon: <DeleteOutlined />,
                         danger: true,
-                        onClick: () => showDeleteConfirm(record._id || record.transactionId)
+                        onClick: () => showDeleteConfirm(record._id || record.transactionId, record.islemTuru)
                     },
                 ];
 
@@ -266,20 +328,21 @@ const KasaDefteri = () => {
     return (
         <div style={{ padding: '15px', background: '#f5f5f5', minHeight: '100vh', overflowX: 'hidden' }}>
 
+            {/* 🚀 MÜŞTERİNİN AŞIK OLACAĞI 3'LÜ KOKPİT EKRANI */}
             <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
                 <Col xs={24} sm={8}>
-                    <Card variant="borderless" style={{ borderLeft: '5px solid #52c41a', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <Statistic title="Toplam Tahsilat (Gelir)" value={stats.toplamGelir} precision={2} styles={{ content: { color: '#52c41a' } }} prefix={<ArrowUpOutlined />} suffix="₺" />
+                    <Card variant="borderless" style={{ borderLeft: '5px solid #1890ff', background: '#e6f7ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                        <Statistic title={<span style={{ fontWeight: 'bold' }}>1. Kasa (Sıcak Nakit)</span>} value={stats.netBakiye} precision={2} styles={{ content: { color: '#1890ff', fontWeight: 'bold' } }} prefix={<WalletOutlined />} suffix="₺" />
                     </Card>
                 </Col>
                 <Col xs={24} sm={8}>
-                    <Card variant="borderless" style={{ borderLeft: '5px solid #ff4d4f', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <Statistic title="Toplam Ödeme (Gider)" value={stats.toplamGider} precision={2} styles={{ content: { color: '#ff4d4f' } }} prefix={<ArrowDownOutlined />} suffix="₺" />
+                    <Card variant="borderless" style={{ borderLeft: '5px solid #722ed1', background: '#f9f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                        <Statistic title={<span style={{ fontWeight: 'bold' }}>2. Piyasada Bekleyen (Alacaklar)</span>} value={stats.toplamAlacak} precision={2} styles={{ content: { color: '#722ed1', fontWeight: 'bold' } }} prefix={<FileTextOutlined />} suffix="₺" />
                     </Card>
                 </Col>
                 <Col xs={24} sm={8}>
-                    <Card variant="borderless" style={{ borderLeft: '5px solid #1890ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <Statistic title="Kasa Mevcudu" value={stats.netBakiye} precision={2} styles={{ content: { color: '#1890ff' } }} prefix={<WalletOutlined />} suffix="₺" />
+                    <Card variant="borderless" style={{ borderLeft: '5px solid #52c41a', background: '#f6ffed', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                        <Statistic title={<span style={{ fontWeight: 'bold' }}>3. ŞİRKET NET VARLIĞI (1 + 2)</span>} value={stats.netBakiye + stats.toplamAlacak} precision={2} styles={{ content: { color: '#52c41a', fontWeight: 'bold', fontSize: '24px' } }} prefix={<GlobalOutlined />} suffix="₺" />
                     </Card>
                 </Col>
             </Row>
@@ -288,7 +351,7 @@ const KasaDefteri = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: 15 }}>
                     <Space>
                         <WalletOutlined style={{ color: '#1890ff', fontSize: '20px' }} />
-                        <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Kasa Defteri</span>
+                        <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Kasa & Finans Defteri</span>
                     </Space>
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => {
                         setEditingOdeme(null);
@@ -296,18 +359,28 @@ const KasaDefteri = () => {
                         form.resetFields();
                         setIsModalVisible(true);
                     }}>
-                        Yeni İşlem
+                        Yeni Kasa İşlemi
                     </Button>
                 </div>
 
-                <Table
-                    columns={columns}
-                    dataSource={data}
-                    rowKey={(record) => record._id || record.transactionId || Math.random().toString()}
-                    loading={loading}
-                    size="middle"
-                    pagination={{ pageSize: 10, size: 'small' }}
-                />
+                {/* 🚀 FİLTRELEME SEKMELERİ (TABS) */}
+                <Tabs defaultActiveKey="3" items={[
+                    {
+                        key: '1',
+                        label: <span><WalletOutlined /> Sadece Kasa (Nakit)</span>,
+                        children: <Table columns={columns} dataSource={kasaData} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                    },
+                    {
+                        key: '2',
+                        label: <span style={{ color: '#722ed1' }}><FileTextOutlined /> Sadece Fişler (Üretim)</span>,
+                        children: <Table columns={columns} dataSource={uretimData} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                    },
+                    {
+                        key: '3',
+                        label: <span style={{ fontWeight: 'bold', color: '#1890ff' }}><GlobalOutlined /> BÜYÜK RESİM (Tümü)</span>,
+                        children: <Table columns={columns} dataSource={konsolideData} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                    }
+                ]} />
             </Card>
 
             <Modal
