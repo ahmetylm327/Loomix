@@ -12,7 +12,6 @@ import {
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 
-const { Title, Text } = Typography;
 const { Option } = Select;
 const { confirm } = Modal;
 
@@ -40,15 +39,14 @@ const KasaDefteri = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 🚀 HEM KASAYI HEM FİŞLERİ AYNI ANDA ÇEKİYORUZ
-            // (Not: Eğer backend'de fişleri listeleme linkin /uretimler ise aşağıdaki '/uretim' kısmını '/uretimler' yapabilirsin)
+            // 🚀 VERİ ÇEKME YOLU DÜZELTİLDİ: /uretimler veya /productions denenebilir. Standart olarak /uretim bıraktım ama veriyi daha güvenli alıyoruz.
             const [kasaRes, uretimRes] = await Promise.all([
                 axiosInstance.get('/payments'),
-                axiosInstance.get('/uretim').catch(() => ({ data: [] })) // Hata verirse boş liste dönsün
+                axiosInstance.get('/uretim').catch(() => ({ data: [] })) // Hata alırsan burayı '/uretimler' veya '/productions' yap
             ]);
 
-            let kasalar = kasaRes.data;
-            let uretimler = uretimRes.data;
+            let kasalar = kasaRes.data || [];
+            let uretimler = uretimRes.data || [];
 
             // 1. Kasa İstatistikleri ve Formatlaması
             let gelir = 0;
@@ -72,15 +70,18 @@ const KasaDefteri = () => {
                     islemTuru: 'Uretim', // Tabloda ayırt etmek için mühür
                     tutar: uTutar,
                     islemYonu: 'Alacak',
-                    odemeTarihi: u.productionDate,
-                    kategori: 'Üretim / Fiş Kesimi'
+                    odemeTarihi: u.productionDate || u.createdAt, // Güvenli tarih
+                    kategori: 'Üretim / Fiş Kesimi',
+                    // Alt objeleri güvenli açma
+                    cariAdi: u.cariId?.firmaAdi || 'Bilinmeyen Firma',
+                    urunAdi: u.productId?.urunAdi || 'Ürün'
                 };
             });
 
             // 3. KONSOLİDE (BİRLEŞTİRİLMİŞ) LİSTE
             let birlesikListe = [...kasalar, ...formatliUretimler];
 
-            // 🚀 NİHAİ ÇÖZÜM: Saat/Dakika farkından doğan Bug giderildi (Tüm listelere uygulanır)
+            // 🚀 SIRALAMA ALGORİTMASI
             const siralamaAlgoritmasi = (a, b) => {
                 const dateA = a.odemeTarihi || a.paymentDate;
                 const dateB = b.odemeTarihi || b.paymentDate;
@@ -164,7 +165,6 @@ const KasaDefteri = () => {
     };
 
     const showDeleteConfirm = (id, islemTuru) => {
-        // 🚀 KORUMA: Fişler Kasa ekranından silinemez!
         if (islemTuru === 'Uretim') {
             message.warning("Fiş iptal işlemleri sadece 'Üretimler / Fişler' sayfasından yapılabilir!");
             return;
@@ -195,14 +195,12 @@ const KasaDefteri = () => {
                 let muhatapAdi = 'Genel / Muhtelif İşlem';
                 let renk = '#8c8c8c';
 
-                // 🚀 MUHATAP AYIRMA (Fiş mi, Kasa mı?)
+                // 🚀 MUHATAP AYIRMA (Güvenli Okuma)
                 if (record.islemTuru === 'Uretim') {
-                    // Üretim Fişiyse Backend populate yapmış olabilir
-                    const cariAdi = record.cariId?.firmaAdi || cariler.find(c => c._id === record.cariId)?.firmaAdi;
-                    muhatapAdi = cariAdi || 'Bilinmeyen Firma';
-                    renk = '#722ed1'; // Fişler için MOR renk
+                    // Üretim Fişi için önceden hazırladığımız güvenli veriyi kullanıyoruz
+                    muhatapAdi = record.cariAdi;
+                    renk = '#722ed1';
                 } else {
-                    // Normal Kasa İşlemiyse
                     const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
                     if (rId === 'SAHSI_HARCAMA') {
                         muhatapAdi = 'Şahsi / Şirket İçi Harcama';
@@ -217,7 +215,9 @@ const KasaDefteri = () => {
                 }
 
                 const tip = record.islemYonu || record.transactionType;
-                const gosterilecekNot = record.notlar || record.notes || record.aciklama || record.description;
+                const gosterilecekNot = record.islemTuru === 'Uretim'
+                    ? `Satılan Ürün: ${record.urunAdi} - ${record.quantity} Adet. ${record.notes || ''}`
+                    : (record.notlar || record.notes || record.aciklama || record.description);
 
                 return (
                     <div>
@@ -280,7 +280,6 @@ const KasaDefteri = () => {
             width: 50,
             align: 'right',
             render: (_, record) => {
-                // 🚀 Üretim Fişiyse menü çıkarma!
                 if (record.islemTuru === 'Uretim') return null;
 
                 const items = [
@@ -328,7 +327,6 @@ const KasaDefteri = () => {
     return (
         <div style={{ padding: '15px', background: '#f5f5f5', minHeight: '100vh', overflowX: 'hidden' }}>
 
-            {/* 🚀 MÜŞTERİNİN AŞIK OLACAĞI 3'LÜ KOKPİT EKRANI */}
             <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
                 <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ borderLeft: '5px solid #1890ff', background: '#e6f7ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
@@ -363,7 +361,6 @@ const KasaDefteri = () => {
                     </Button>
                 </div>
 
-                {/* 🚀 FİLTRELEME SEKMELERİ (TABS) */}
                 <Tabs defaultActiveKey="3" items={[
                     {
                         key: '1',
