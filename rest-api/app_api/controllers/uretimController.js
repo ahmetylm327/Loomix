@@ -14,11 +14,10 @@ const uretimEkle = async (req, res) => {
         const cari = await Cari.findById(cariId);
         if (!cari) return res.status(404).json({ mesaj: "Firma (Cari) Bulunamadı" });
 
-        // Ekranda girilen özel fiyatı alıyoruz
         const uygulanacakFiyat = birimFiyat !== undefined ? Number(birimFiyat) : (urun.birimFiyat || 0);
         const islemTutari = uygulanacakFiyat * quantity;
 
-        // 1. FİŞİ KES (Fiyat sadece bu fişe özel mühürlendi!)
+        // 1. FİŞİ KES
         const yeniUretim = new Uretim({
             productId,
             cariId,
@@ -30,11 +29,11 @@ const uretimEkle = async (req, res) => {
         });
         await yeniUretim.save();
 
-        // 2. FİRMAYA BORCUNU YAZ
+        // 2. 🚀 FİRMAYA BORCUNU YAZ (+ Eklendiği için Firmanın Bize Olan Borcu Kesin Olarak Artar)
         cari.bakiye = (cari.bakiye || 0) + islemTutari;
         await cari.save();
 
-        // 3. KASAYA OTOMATİK GİDER YAZ
+        // 3. KASAYA OTOMATİK GİDER YAZ (Kasa defterinden düşmesi için)
         const yeniOdeme = new Odeme({
             islemYonu: 'Gider',
             odemeTipi: 'Nakit',
@@ -45,8 +44,6 @@ const uretimEkle = async (req, res) => {
             notlar: `Otomatik Mahsup (Fiş): ${urun.urunAdi} - ${quantity} Adet. ${notes || ''}`
         });
         await yeniOdeme.save();
-
-        // (ÜRÜNÜN KALICI FİYATINI DEĞİŞTİREN "SİHİRLİ DOKUNUŞ" KODU BURADAN SİLİNDİ!)
 
         res.status(201).json({
             status: "Üretim başarıyla işlendi ve Kasaya otomatik yansıtıldı.",
