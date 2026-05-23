@@ -7,12 +7,17 @@ import {
 import {
     PlusOutlined, WalletOutlined, ArrowUpOutlined,
     ArrowDownOutlined, EditOutlined, DeleteOutlined, MoreOutlined,
-    FileTextOutlined, GlobalOutlined
+    FileTextOutlined, GlobalOutlined, FilterOutlined
 } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
+import isBetween from 'dayjs/plugin/isBetween';
+
+// Tarih aralığı filtresi için dayjs eklentisini aktifleştiriyoruz
+dayjs.extend(isBetween);
 
 const { Option } = Select;
+const { RangePicker } = DatePicker;
 const { confirm } = Modal;
 
 const KasaDefteri = () => {
@@ -29,6 +34,10 @@ const KasaDefteri = () => {
     const [stats, setStats] = useState({ toplamGelir: 0, toplamGider: 0, netBakiye: 0, toplamAlacak: 0 });
     const [seciliKategori, setSeciliKategori] = useState('');
 
+    // 🚀 FİLTRELEME STATE'LERİ
+    const [dateRange, setDateRange] = useState(null);
+    const [selectedFirma, setSelectedFirma] = useState(null);
+
     useEffect(() => {
         fetchTumVeriler();
     }, []);
@@ -36,7 +45,6 @@ const KasaDefteri = () => {
     const fetchTumVeriler = async () => {
         setLoading(true);
         try {
-            // 🚀 BÜYÜK YENİLİK: Kasayı, Fişleri ve Müşteri Bakiyelerini aynı anda, tek bir ekranda senkronize çekiyoruz!
             const [kasaRes, uretimRes, cariRes, personelRes1, personelRes2] = await Promise.all([
                 axiosInstance.get('/payments').catch(() => ({ data: [] })),
                 axiosInstance.get('/production').catch(() => ({ data: [] })),
@@ -64,14 +72,13 @@ const KasaDefteri = () => {
                 else if (yon === 'Gider') gider += tutarVal;
             });
 
-            // 2. 🚀 PİYASADAKİ GERÇEK ALACAK (Mükerrer Kayıt Çözüldü!)
-            // Artık fişleri toplamıyoruz; direkt firmaların GÜNCEL hesaplarına bakıyoruz. Tahsilat oldukça bu rakam otomatik düşer!
+            // 2. PİYASADAKİ GERÇEK ALACAK
             let gercekAlacak = 0;
             firmalar.forEach(firma => {
                 gercekAlacak += (Number(firma.bakiye) || 0);
             });
 
-            // 3. Fiş (Üretim) Formatlaması (Sadece görsel liste için)
+            // 3. Fiş (Üretim) Formatlaması
             let formatliUretimler = uretimler.map(u => {
                 const uTutar = (u.quantity || 0) * (u.birimFiyat || 0);
                 return {
@@ -87,7 +94,7 @@ const KasaDefteri = () => {
                 };
             });
 
-            // 4. KONSOLİDE LİSTE VE KUSURSUZ SIRALAMA
+            // 4. KONSOLİDE LİSTE VE SIRALAMA
             let birlesikListe = [...kasalar, ...formatliUretimler];
 
             const siralamaAlgoritmasi = (a, b) => {
@@ -108,7 +115,6 @@ const KasaDefteri = () => {
             formatliUretimler.sort(siralamaAlgoritmasi);
             birlesikListe.sort(siralamaAlgoritmasi);
 
-            // Verileri state'e bas ve istatistikleri güncelle
             setKasaData(kasalar);
             setUretimData(formatliUretimler);
             setKonsolideData(birlesikListe);
@@ -117,7 +123,7 @@ const KasaDefteri = () => {
                 toplamGelir: gelir,
                 toplamGider: gider,
                 netBakiye: gelir - gider,
-                toplamAlacak: gercekAlacak // 🚀 Çift hesaplamayı önleyen kesin çözüm!
+                toplamAlacak: gercekAlacak
             });
 
         } catch (error) {
@@ -125,6 +131,28 @@ const KasaDefteri = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    // 🚀 TABLOLAR İÇİN FİLTRELEME MANTIĞI
+    const filtreleData = (dataList) => {
+        return dataList.filter(item => {
+            let dateMatch = true;
+            let firmaMatch = true;
+
+            if (dateRange && dateRange[0] && dateRange[1]) {
+                const itemDate = dayjs(item.odemeTarihi || item.paymentDate);
+                dateMatch = itemDate.isBetween(dateRange[0].startOf('day'), dateRange[1].endOf('day'), null, '[]');
+            }
+
+            if (selectedFirma) {
+                // Kasa işlemleri 'relatedId' kullanır, Üretim fişleri 'cariId' kullanır
+                const rId = typeof item.relatedId === 'object' ? item.relatedId?._id : item.relatedId;
+                const cId = typeof item.cariId === 'object' ? item.cariId?._id : item.cariId;
+                firmaMatch = (rId === selectedFirma) || (cId === selectedFirma);
+            }
+
+            return dateMatch && firmaMatch;
+        });
     };
 
     const handleSave = async (values) => {
@@ -154,7 +182,7 @@ const KasaDefteri = () => {
             setEditingOdeme(null);
             setSeciliKategori('');
             form.resetFields();
-            fetchTumVeriler(); // 🚀 Kayıt sonrası her şeyi yeniden çeker ve hesaplar
+            fetchTumVeriler();
         } catch (error) {
             message.error("Kayıt başarısız! Eksik alanları kontrol edin.");
         }
@@ -191,7 +219,6 @@ const KasaDefteri = () => {
                 let muhatapAdi = 'Genel / Muhtelif İşlem';
                 let renk = '#8c8c8c';
 
-                // 🚀 MUHATAP AYIRMA
                 if (record.islemTuru === 'Uretim') {
                     muhatapAdi = record.cariAdi;
                     renk = '#722ed1';
@@ -356,21 +383,36 @@ const KasaDefteri = () => {
                     </Button>
                 </div>
 
+                {/* 🚀 FİLTRELEME ÇUBUĞU */}
+                <div style={{ background: '#fafafa', padding: '12px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #e8e8e8' }}>
+                    <Row gutter={16} align="middle">
+                        <Col xs={24} sm={2}><b style={{ color: '#595959' }}><FilterOutlined /> Tabloyu Süz:</b></Col>
+                        <Col xs={24} sm={10}>
+                            <RangePicker style={{ width: '100%' }} format="DD.MM.YYYY" onChange={(dates) => setDateRange(dates)} placeholder={['Başlangıç Tarihi', 'Bitiş Tarihi']} />
+                        </Col>
+                        <Col xs={24} sm={10}>
+                            <Select style={{ width: '100%' }} placeholder="Firma Seçin (Tümü İçin Boş Bırakın)" allowClear showSearch optionFilterProp="children" onChange={(val) => setSelectedFirma(val)}>
+                                {cariler.map(cari => (<Option key={cari._id} value={cari._id}>{cari.firmaAdi}</Option>))}
+                            </Select>
+                        </Col>
+                    </Row>
+                </div>
+
                 <Tabs defaultActiveKey="3" items={[
                     {
                         key: '1',
                         label: <span><WalletOutlined /> Sadece Kasa (Nakit)</span>,
-                        children: <Table columns={columns} dataSource={kasaData} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                        children: <Table columns={columns} dataSource={filtreleData(kasaData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
                     },
                     {
                         key: '2',
                         label: <span style={{ color: '#722ed1' }}><FileTextOutlined /> Sadece Fişler (Üretim)</span>,
-                        children: <Table columns={columns} dataSource={uretimData} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                        children: <Table columns={columns} dataSource={filtreleData(uretimData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
                     },
                     {
                         key: '3',
                         label: <span style={{ fontWeight: 'bold', color: '#1890ff' }}><GlobalOutlined /> BÜYÜK RESİM (Tümü)</span>,
-                        children: <Table columns={columns} dataSource={konsolideData} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                        children: <Table columns={columns} dataSource={filtreleData(konsolideData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
                     }
                 ]} />
             </Card>
