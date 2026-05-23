@@ -115,4 +115,21 @@ const hakedisHesapla = async (req, res) => {
 };
 
 // HER İKİ FONKSİYONU DA GÜVENLİ BİR ŞEKİLDE DIŞARI AKTARIYORUZ
-module.exports = { mesaiYukle, hakedisHesapla };
+
+const haftalikAnalizGetir = async (req, res) => {
+    try {
+        const birHaftaOnce = new Date();
+        birHaftaOnce.setDate(birHaftaOnce.getDate() - 7);
+
+        // Hem bu hafta hem geçen hafta olan tüm hakediş hareketlerini getir
+        const hareketler = await PersonelHareket.find({
+            islemTipi: 'Hakediş',
+            islemTarihi: { $gte: birHaftaOnce }
+        }).populate('personelId', 'adSoyad');
+
+        res.status(200).json(hareketler);
+    } catch (hata) {
+        res.status(500).json({ mesaj: "Analiz verisi alınamadı", detay: hata.message });
+    }
+};
+module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir };

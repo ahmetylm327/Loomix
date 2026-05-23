@@ -42,6 +42,7 @@ router.post('/payroll/:employeeId/calculate', ctrlMesai.hakedisHesapla);
 // 🚀 YENİ EKLENEN: Dinamik Mesai Ayarları Rotaları
 router.get('/attendance/settings', ctrlPuantaj.ayarlarıGetir);
 router.post('/attendance/settings', ctrlPuantaj.ayarlarıGuncelle);
+router.get('/mesai/haftalik-analiz', ctrlMesai.haftalikAnalizGetir);
 // ---------------------------------------------------------
 // ⚙️ ÜRETİM ROTALARI
 // ---------------------------------------------------------

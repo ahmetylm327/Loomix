@@ -63,26 +63,23 @@ const uretimGuncelle = async (req, res) => {
     }
 };
 
+// controllers/uretimController.js
 const uretimSil = async (req, res) => {
     try {
         const id = req.params.id;
         const silinecekUretim = await Uretim.findById(id);
+        if (!silinecekUretim) return res.status(404).json({ mesaj: "Fiş bulunamadı." });
 
-        if (!silinecekUretim) return res.status(404).json({ mesaj: "Üretim kaydı bulunamadı." });
-
-        // 🚀 Fişi silmeden önce firmaya yansıyan borcu geri AL
+        // Fişi silmeden önce firmaya yansıyan borcu geri AL
         const iptalTutari = silinecekUretim.quantity * (silinecekUretim.birimFiyat || 0);
         const cari = await Cari.findById(silinecekUretim.cariId);
-
         if (cari) {
             cari.bakiye = (cari.bakiye || 0) - iptalTutari;
             await cari.save();
         }
 
-        // Fişi sil
         await Uretim.findByIdAndDelete(id);
-
-        res.status(200).json({ mesaj: "Fiş başarıyla silindi ve cari bakiyesi güncellendi." });
+        res.status(200).json({ mesaj: "Fiş silindi ve bakiye güncellendi." });
     } catch (hata) {
         res.status(400).json({ mesaj: "Silme hatası", detay: hata.message });
     }

@@ -21,6 +21,7 @@ import KasaDefteri from './pages/KasaDefteri';
 import Raporlar from './pages/Raporlar';
 import YapayZeka from './pages/YapayZeka';
 import CariHareketleri from './pages/CariHareketleri';
+import MaasYonetimi from './pages/MaasYonetimi';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -68,6 +69,7 @@ const AppContent = () => {
         { key: '/kasa', icon: <WalletOutlined />, label: <Link to="/kasa">Kasa İşlemleri (Gelir/Gider)</Link> },
       ],
     },
+    { key: '/maas-yonetimi', icon: <TeamOutlined />, label: <Link to="/maas-yonetimi">Maaş Yönetimi (Cuma Analizi)</Link> },
 
     // --- 4. RAPORLAR VE ANALİZ (PATRON EKRANI) ---
     {
@@ -182,6 +184,7 @@ const AppContent = () => {
               <Route path="/raporlar" element={<Raporlar />} />
               <Route path="/ai-tahmin" element={<YapayZeka />} />
               <Route path="/cari-hareketleri" element={<CariHareketleri />} />
+              <Route path="/maas-yonetimi" element={<MaasYonetimi />} />
             </Routes>
           </div>
         </Content>
