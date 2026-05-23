@@ -118,21 +118,21 @@ const hakedisHesapla = async (req, res) => {
 
 const haftalikAnalizGetir = async (req, res) => {
     try {
-        const birHaftaOnce = new Date();
-        birHaftaOnce.setDate(birHaftaOnce.getDate() - 7);
+        const tarihSiniri = new Date();
+        tarihSiniri.setDate(tarihSiniri.getDate() - 14);
 
-        // Hem bu hafta hem geçen hafta olan tüm hakediş hareketlerini getir
+        // Populate kısmında model isminin doğruluğundan emin oluyoruz
         const hareketler = await PersonelHareket.find({
             islemTipi: 'Hakediş',
-            islemTarihi: { $gte: birHaftaOnce }
-        }).populate('personelId', 'adSoyad');
+            islemTarihi: { $gte: tarihSiniri }
+        }).populate({ path: 'personelId', select: 'adSoyad' });
 
         res.status(200).json(hareketler);
     } catch (hata) {
+        console.error("ANALİZ HATASI:", hata); // Hatanın detayını sunucu logunda göreceksin
         res.status(500).json({ mesaj: "Analiz verisi alınamadı", detay: hata.message });
     }
 };
-
 const topluOdemeYap = async (req, res) => {
     try {
         const { list } = req.body; // Frontend'den gelen analiz listesi
