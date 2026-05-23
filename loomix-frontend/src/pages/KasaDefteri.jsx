@@ -16,7 +16,6 @@ const { Option } = Select;
 const { confirm } = Modal;
 
 const KasaDefteri = () => {
-    // 🚀 3 FARKLI LİSTE İÇİN STATE'LER
     const [kasaData, setKasaData] = useState([]);
     const [uretimData, setUretimData] = useState([]);
     const [konsolideData, setKonsolideData] = useState([]);
@@ -39,16 +38,31 @@ const KasaDefteri = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 🚀 VERİ ÇEKME YOLU DÜZELTİLDİ: /uretimler veya /productions denenebilir. Standart olarak /uretim bıraktım ama veriyi daha güvenli alıyoruz.
-            const [kasaRes, uretimRes] = await Promise.all([
-                axiosInstance.get('/payments'),
-                axiosInstance.get('/uretim').catch(() => ({ data: [] })) // Hata alırsan burayı '/uretimler' veya '/productions' yap
-            ]);
+            // 1. KASAYI ÇEK (Linkin '/payments' olduğu kesin)
+            let kasalar = [];
+            try {
+                const kasaRes = await axiosInstance.get('/payments');
+                kasalar = kasaRes.data || [];
+            } catch (e) { console.log("Kasa çekilemedi"); }
 
-            let kasalar = kasaRes.data || [];
-            let uretimler = uretimRes.data || [];
+            // 2. 🚀 OTOMATİK FİŞ RADARI: Backend'deki isim ne olursa olsun bulacak!
+            let uretimler = [];
+            const olasiLinkler = ['/productions', '/uretimler', '/uretim', '/api/productions', '/api/uretimler'];
 
-            // 1. Kasa İstatistikleri ve Formatlaması
+            for (let link of olasiLinkler) {
+                try {
+                    const res = await axiosInstance.get(link);
+                    if (res.data && Array.isArray(res.data)) {
+                        uretimler = res.data;
+                        console.log(`Fişler başarıyla şu linkten bulundu: ${link}`);
+                        break; // Bulduğu an döngüyü kırıp aramayı bırakır!
+                    }
+                } catch (err) {
+                    // Bu kapı kapalı, diğerine geç...
+                }
+            }
+
+            // 3. Kasa İstatistikleri ve Formatlaması
             let gelir = 0;
             let gider = 0;
             kasalar = kasalar.map(k => ({ ...k, islemTuru: 'Kasa' }));
@@ -59,7 +73,7 @@ const KasaDefteri = () => {
                 else if (yon === 'Gider') gider += tutarVal;
             });
 
-            // 2. Üretim (Fiş/Alacak) İstatistikleri ve Formatlaması
+            // 4. Üretim (Fiş/Alacak) İstatistikleri ve Formatlaması
             let alacak = 0;
             let formatliUretimler = uretimler.map(u => {
                 const uTutar = (u.quantity || 0) * (u.birimFiyat || 0);
@@ -67,21 +81,20 @@ const KasaDefteri = () => {
                 return {
                     ...u,
                     _id: u._id,
-                    islemTuru: 'Uretim', // Tabloda ayırt etmek için mühür
+                    islemTuru: 'Uretim', // Tabloda Kasa'dan ayırmak için mühür
                     tutar: uTutar,
                     islemYonu: 'Alacak',
                     odemeTarihi: u.productionDate || u.createdAt, // Güvenli tarih
                     kategori: 'Üretim / Fiş Kesimi',
-                    // Alt objeleri güvenli açma
                     cariAdi: u.cariId?.firmaAdi || 'Bilinmeyen Firma',
                     urunAdi: u.productId?.urunAdi || 'Ürün'
                 };
             });
 
-            // 3. KONSOLİDE (BİRLEŞTİRİLMİŞ) LİSTE
+            // 5. KONSOLİDE (BİRLEŞTİRİLMİŞ) LİSTE
             let birlesikListe = [...kasalar, ...formatliUretimler];
 
-            // 🚀 SIRALAMA ALGORİTMASI
+            // 🚀 KUSURSUZ SIRALAMA ALGORİTMASI
             const siralamaAlgoritmasi = (a, b) => {
                 const dateA = a.odemeTarihi || a.paymentDate;
                 const dateB = b.odemeTarihi || b.paymentDate;
@@ -89,9 +102,7 @@ const KasaDefteri = () => {
                 const dayA = dateA ? dayjs(dateA).startOf('day').valueOf() : 0;
                 const dayB = dateB ? dayjs(dateB).startOf('day').valueOf() : 0;
 
-                if (dayA !== dayB) {
-                    return dayB - dayA;
-                }
+                if (dayA !== dayB) return dayB - dayA;
 
                 const idA = a._id?.toString() || a.transactionId?.toString() || "";
                 const idB = b._id?.toString() || b.transactionId?.toString() || "";
@@ -109,7 +120,7 @@ const KasaDefteri = () => {
             setStats({ toplamGelir: gelir, toplamGider: gider, netBakiye: gelir - gider, toplamAlacak: alacak });
 
         } catch (error) {
-            message.error("Veriler tam olarak yüklenemedi!");
+            message.error("Veriler hesaplanırken hata oluştu!");
         } finally {
             setLoading(false);
         }
@@ -197,8 +208,7 @@ const KasaDefteri = () => {
 
                 // 🚀 MUHATAP AYIRMA (Güvenli Okuma)
                 if (record.islemTuru === 'Uretim') {
-                    // Üretim Fişi için önceden hazırladığımız güvenli veriyi kullanıyoruz
-                    muhatapAdi = record.cariAdi;
+                    muhatapAdi = record.cariAdi; // Radardan gelen güvenli veri
                     renk = '#722ed1';
                 } else {
                     const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
