@@ -67,20 +67,24 @@ const uretimSil = async (req, res) => {
     try {
         const id = req.params.id;
         const silinecekUretim = await Uretim.findById(id);
+
         if (!silinecekUretim) return res.status(404).json({ mesaj: "Üretim kaydı bulunamadı." });
 
+        // 🚀 Fişi silmeden önce firmaya yansıyan borcu geri AL
         const iptalTutari = silinecekUretim.quantity * (silinecekUretim.birimFiyat || 0);
-
         const cari = await Cari.findById(silinecekUretim.cariId);
+
         if (cari) {
             cari.bakiye = (cari.bakiye || 0) - iptalTutari;
             await cari.save();
         }
 
+        // Fişi sil
         await Uretim.findByIdAndDelete(id);
-        res.status(204).send();
+
+        res.status(200).json({ mesaj: "Fiş başarıyla silindi ve cari bakiyesi güncellendi." });
     } catch (hata) {
-        res.status(400).json({ mesaj: "Üretim silinemedi", detay: hata.message });
+        res.status(400).json({ mesaj: "Silme hatası", detay: hata.message });
     }
 };
 
