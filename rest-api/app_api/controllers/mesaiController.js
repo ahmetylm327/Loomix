@@ -132,4 +132,24 @@ const haftalikAnalizGetir = async (req, res) => {
         res.status(500).json({ mesaj: "Analiz verisi alınamadı", detay: hata.message });
     }
 };
-module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir };
+
+const topluOdemeYap = async (req, res) => {
+    try {
+        const { list } = req.body; // Frontend'den gelen analiz listesi
+        for (const item of list) {
+            // Ödeme kaydını oluştur (negatif tutar olarak)
+            await PersonelHareket.create({
+                personelId: item.pId, // (Frontend'den pId bilgisini de göndermelisin)
+                islemTipi: 'Ödeme',
+                tutar: -item.buHafta, // Ödeme olduğu için negatif
+                aciklama: `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş Ödemesi`
+            });
+            // Personel bakiyesini güncelle
+            await Personel.findByIdAndUpdate(item.pId, { $inc: { bakiye: -item.buHafta } });
+        }
+        res.status(200).json({ mesaj: "Ödemeler başarıyla sisteme işlendi." });
+    } catch (hata) {
+        res.status(500).json({ mesaj: "Ödeme işlemi başarısız." });
+    }
+};
+module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir, topluOdemeYap };

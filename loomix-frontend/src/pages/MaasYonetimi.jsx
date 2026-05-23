@@ -50,8 +50,22 @@ const MaasYonetimi = () => {
         }
     ];
 
+    const topluOdemeYap = async () => {
+        try {
+            const analiz = analizTablosu();
+            // Backend'de bir rota oluşturup tüm personellere 'Ödeme' kaydı atacağız
+            await axiosInstance.post('/mesai/toplu-odeme', { list: analiz });
+            message.success("Tüm ödemeler kaydedildi ve bakiyeler güncellendi.");
+            fetchAnaliz(); // Listeyi yenile
+        } catch (e) {
+            message.error("Ödeme kaydedilemedi.");
+        }
+    };
+
     return (
-        <Card title="Cuma Günü Maaş Analizi" style={{ margin: 20 }}>
+        <Card title="Cuma Günü Maaş Analizi" style={{ margin: 20 }} extra={
+            <Button type="primary" onClick={topluOdemeYap}>Bu Haftayı Öde ve Kaydet</Button>
+        }>
             <Table dataSource={analizTablosu()} columns={columns} loading={loading} rowKey="isim" />
         </Card>
     );
