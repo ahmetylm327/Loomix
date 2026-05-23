@@ -30,24 +30,30 @@ const KasaDefteri = () => {
     const [seciliKategori, setSeciliKategori] = useState('');
 
     useEffect(() => {
-        fetchData();
-        fetchCariler();
-        fetchPersoneller();
+        fetchTumVeriler();
     }, []);
 
-    const fetchData = async () => {
+    const fetchTumVeriler = async () => {
         setLoading(true);
         try {
-            // 🚀 İŞTE BÜYÜK ÇÖZÜM: Kapı numarasını tam olarak /production (S takısı olmadan) yaptık!
-            const [kasaRes, uretimRes] = await Promise.all([
+            // 🚀 BÜYÜK YENİLİK: Kasayı, Fişleri ve Müşteri Bakiyelerini aynı anda, tek bir ekranda senkronize çekiyoruz!
+            const [kasaRes, uretimRes, cariRes, personelRes1, personelRes2] = await Promise.all([
                 axiosInstance.get('/payments').catch(() => ({ data: [] })),
-                axiosInstance.get('/production').catch(() => ({ data: [] }))
+                axiosInstance.get('/production').catch(() => ({ data: [] })),
+                axiosInstance.get('/caris').catch(() => ({ data: [] })),
+                axiosInstance.get('/employees').catch(() => null),
+                axiosInstance.get('/personel').catch(() => null)
             ]);
 
             let kasalar = kasaRes.data || [];
             let uretimler = uretimRes.data || [];
+            let firmalar = cariRes.data || [];
+            let isciler = (personelRes1 && personelRes1.data) ? personelRes1.data : ((personelRes2 && personelRes2.data) ? personelRes2.data : []);
 
-            // 1. Kasa İstatistikleri ve Formatlaması
+            setCariler(firmalar);
+            setPersoneller(isciler);
+
+            // 1. Kasa İstatistikleri (Nakit)
             let gelir = 0;
             let gider = 0;
             kasalar = kasalar.map(k => ({ ...k, islemTuru: 'Kasa' }));
@@ -58,28 +64,32 @@ const KasaDefteri = () => {
                 else if (yon === 'Gider') gider += tutarVal;
             });
 
-            // 2. Üretim (Fiş/Alacak) İstatistikleri ve Formatlaması
-            let alacak = 0;
+            // 2. 🚀 PİYASADAKİ GERÇEK ALACAK (Mükerrer Kayıt Çözüldü!)
+            // Artık fişleri toplamıyoruz; direkt firmaların GÜNCEL hesaplarına bakıyoruz. Tahsilat oldukça bu rakam otomatik düşer!
+            let gercekAlacak = 0;
+            firmalar.forEach(firma => {
+                gercekAlacak += (Number(firma.bakiye) || 0);
+            });
+
+            // 3. Fiş (Üretim) Formatlaması (Sadece görsel liste için)
             let formatliUretimler = uretimler.map(u => {
                 const uTutar = (u.quantity || 0) * (u.birimFiyat || 0);
-                alacak += uTutar;
                 return {
                     ...u,
                     _id: u._id,
-                    islemTuru: 'Uretim', // Tabloda Kasa'dan ayırmak için mühür
+                    islemTuru: 'Uretim',
                     tutar: uTutar,
                     islemYonu: 'Alacak',
-                    odemeTarihi: u.productionDate || u.createdAt, // Güvenli tarih
+                    odemeTarihi: u.productionDate || u.createdAt,
                     kategori: 'Üretim / Fiş Kesimi',
                     cariAdi: u.cariId?.firmaAdi || 'Bilinmeyen Firma',
                     urunAdi: u.productId?.urunAdi || 'Ürün'
                 };
             });
 
-            // 3. KONSOLİDE (BİRLEŞTİRİLMİŞ) LİSTE
+            // 4. KONSOLİDE LİSTE VE KUSURSUZ SIRALAMA
             let birlesikListe = [...kasalar, ...formatliUretimler];
 
-            // 🚀 KUSURSUZ SIRALAMA ALGORİTMASI
             const siralamaAlgoritmasi = (a, b) => {
                 const dateA = a.odemeTarihi || a.paymentDate;
                 const dateB = b.odemeTarihi || b.paymentDate;
@@ -98,33 +108,23 @@ const KasaDefteri = () => {
             formatliUretimler.sort(siralamaAlgoritmasi);
             birlesikListe.sort(siralamaAlgoritmasi);
 
-            // Verileri state'e bas
+            // Verileri state'e bas ve istatistikleri güncelle
             setKasaData(kasalar);
             setUretimData(formatliUretimler);
             setKonsolideData(birlesikListe);
-            setStats({ toplamGelir: gelir, toplamGider: gider, netBakiye: gelir - gider, toplamAlacak: alacak });
+
+            setStats({
+                toplamGelir: gelir,
+                toplamGider: gider,
+                netBakiye: gelir - gider,
+                toplamAlacak: gercekAlacak // 🚀 Çift hesaplamayı önleyen kesin çözüm!
+            });
 
         } catch (error) {
             message.error("Veriler hesaplanırken hata oluştu!");
         } finally {
             setLoading(false);
         }
-    };
-
-    const fetchCariler = async () => {
-        try {
-            const response = await axiosInstance.get('/caris');
-            setCariler(response.data);
-        } catch (error) { }
-    };
-
-    const fetchPersoneller = async () => {
-        try {
-            let response;
-            try { response = await axiosInstance.get('/employees'); }
-            catch (e) { response = await axiosInstance.get('/personel'); }
-            setPersoneller(response.data);
-        } catch (error) { }
     };
 
     const handleSave = async (values) => {
@@ -154,7 +154,7 @@ const KasaDefteri = () => {
             setEditingOdeme(null);
             setSeciliKategori('');
             form.resetFields();
-            fetchData();
+            fetchTumVeriler(); // 🚀 Kayıt sonrası her şeyi yeniden çeker ve hesaplar
         } catch (error) {
             message.error("Kayıt başarısız! Eksik alanları kontrol edin.");
         }
@@ -175,7 +175,7 @@ const KasaDefteri = () => {
             onOk() {
                 axiosInstance.delete(`/payments/${id}`).then(() => {
                     message.success("İşlem silindi ve bakiyeler güncellendi!");
-                    fetchData();
+                    fetchTumVeriler();
                 }).catch(() => message.error("Silme işlemi başarısız!"));
             },
         });
