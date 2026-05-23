@@ -38,31 +38,16 @@ const KasaDefteri = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. KASAYI ÇEK (Linkin '/payments' olduğu kesin)
-            let kasalar = [];
-            try {
-                const kasaRes = await axiosInstance.get('/payments');
-                kasalar = kasaRes.data || [];
-            } catch (e) { console.log("Kasa çekilemedi"); }
+            // 🚀 İŞTE BÜYÜK ÇÖZÜM: Kapı numarasını tam olarak /production (S takısı olmadan) yaptık!
+            const [kasaRes, uretimRes] = await Promise.all([
+                axiosInstance.get('/payments').catch(() => ({ data: [] })),
+                axiosInstance.get('/production').catch(() => ({ data: [] }))
+            ]);
 
-            // 2. 🚀 OTOMATİK FİŞ RADARI: Backend'deki isim ne olursa olsun bulacak!
-            let uretimler = [];
-            const olasiLinkler = ['/productions', '/uretimler', '/uretim', '/api/productions', '/api/uretimler'];
+            let kasalar = kasaRes.data || [];
+            let uretimler = uretimRes.data || [];
 
-            for (let link of olasiLinkler) {
-                try {
-                    const res = await axiosInstance.get(link);
-                    if (res.data && Array.isArray(res.data)) {
-                        uretimler = res.data;
-                        console.log(`Fişler başarıyla şu linkten bulundu: ${link}`);
-                        break; // Bulduğu an döngüyü kırıp aramayı bırakır!
-                    }
-                } catch (err) {
-                    // Bu kapı kapalı, diğerine geç...
-                }
-            }
-
-            // 3. Kasa İstatistikleri ve Formatlaması
+            // 1. Kasa İstatistikleri ve Formatlaması
             let gelir = 0;
             let gider = 0;
             kasalar = kasalar.map(k => ({ ...k, islemTuru: 'Kasa' }));
@@ -73,7 +58,7 @@ const KasaDefteri = () => {
                 else if (yon === 'Gider') gider += tutarVal;
             });
 
-            // 4. Üretim (Fiş/Alacak) İstatistikleri ve Formatlaması
+            // 2. Üretim (Fiş/Alacak) İstatistikleri ve Formatlaması
             let alacak = 0;
             let formatliUretimler = uretimler.map(u => {
                 const uTutar = (u.quantity || 0) * (u.birimFiyat || 0);
@@ -91,7 +76,7 @@ const KasaDefteri = () => {
                 };
             });
 
-            // 5. KONSOLİDE (BİRLEŞTİRİLMİŞ) LİSTE
+            // 3. KONSOLİDE (BİRLEŞTİRİLMİŞ) LİSTE
             let birlesikListe = [...kasalar, ...formatliUretimler];
 
             // 🚀 KUSURSUZ SIRALAMA ALGORİTMASI
@@ -206,9 +191,9 @@ const KasaDefteri = () => {
                 let muhatapAdi = 'Genel / Muhtelif İşlem';
                 let renk = '#8c8c8c';
 
-                // 🚀 MUHATAP AYIRMA (Güvenli Okuma)
+                // 🚀 MUHATAP AYIRMA
                 if (record.islemTuru === 'Uretim') {
-                    muhatapAdi = record.cariAdi; // Radardan gelen güvenli veri
+                    muhatapAdi = record.cariAdi;
                     renk = '#722ed1';
                 } else {
                     const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
