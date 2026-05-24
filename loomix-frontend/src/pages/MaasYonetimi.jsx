@@ -76,13 +76,19 @@ const MaasYonetimi = () => {
     };
 
     const topluOdemeYap = async () => {
-        try {
-            const list = veriler.map(v => ({ pId: v.pId, buHafta: v.duzenlenenTutar }));
-            await axiosInstance.post('/mesai/toplu-odeme', { list, paketIsmi });
-            message.success("Ödeme paketi başarıyla arşivlendi!");
-            fetchAnaliz();
-            fetchArsiv();
-        } catch (e) { message.error("Ödeme kaydedilemedi."); }
+        Modal.confirm({
+            title: 'Ödemeleri Onayla',
+            content: `"${paketIsmi}" paketindeki toplam ${toplamTalep.toLocaleString()} ₺ ödeme yapılacak. Onaylıyor musun?`,
+            onOk: async () => {
+                try {
+                    const list = veriler.map(v => ({ pId: v.pId, buHafta: v.duzenlenenTutar }));
+                    await axiosInstance.post('/mesai/toplu-odeme', { list, paketIsmi });
+                    message.success("Ödemeler başarıyla kasadan düşüldü ve arşivlendi!");
+                    fetchAnaliz();
+                    fetchArsiv();
+                } catch (e) { message.error("Ödeme kaydedilemedi."); }
+            }
+        });
     };
 
     const toplamTalep = veriler.reduce((acc, curr) => acc + (curr.duzenlenenTutar - curr.gecenHafta), 0);

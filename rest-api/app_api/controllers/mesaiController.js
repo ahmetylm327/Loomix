@@ -110,22 +110,37 @@ const haftalikAnalizGetir = async (req, res) => {
 // 4. TOPLU ÖDEME
 const topluOdemeYap = async (req, res) => {
     try {
-        const { list, paketIsmi } = req.body; // Paket ismini frontend'den alacağız
-        const baslik = paketIsmi || `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş Ödemesi`;
+        const { list, paketIsmi } = req.body;
+        const baslik = paketIsmi || `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş`;
+
+        let toplamOdeme = 0;
 
         for (const item of list) {
-            // item.buHafta frontend'den (manuel düzenlenmiş haliyle) gelecek
             if (!item.pId || item.buHafta <= 0) continue;
 
+            // 1. Personel Hareket Kaydı
             await PersonelHareket.create({
                 personelId: item.pId,
                 islemTipi: 'Ödeme',
                 tutar: -item.buHafta,
-                aciklama: baslik // Artık burada "paket ismi" yazacak
+                aciklama: baslik
             });
+
+            // 2. Personel Bakiyesini Güncelle
             await Personel.findByIdAndUpdate(item.pId, { $inc: { bakiye: -item.buHafta } });
+
+            // 3. KASA GÜNCELLEME (Önemli: Burası kasada görünecek)
+            await Odeme.create({
+                tutar: item.buHafta,
+                aciklama: `${baslik} - Personel Ödemesi`,
+                tip: 'Gider', // veya sistemindeki kasa modeli neyse
+                tarih: new Date()
+            });
+
+            toplamOdeme += item.buHafta;
         }
-        res.status(200).json({ mesaj: "Ödeme paketi başarıyla arşivlendi." });
+
+        res.status(200).json({ mesaj: "Ödemeler başarıyla kasaya işlendi." });
     } catch (hata) {
         res.status(500).json({ mesaj: "Ödeme işlemi başarısız.", detay: hata.message });
     }
