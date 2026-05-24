@@ -110,19 +110,22 @@ const haftalikAnalizGetir = async (req, res) => {
 // 4. TOPLU ÖDEME
 const topluOdemeYap = async (req, res) => {
     try {
-        const { list } = req.body;
+        const { list, paketIsmi } = req.body; // Paket ismini frontend'den alacağız
+        const baslik = paketIsmi || `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş Ödemesi`;
+
         for (const item of list) {
+            // item.buHafta frontend'den (manuel düzenlenmiş haliyle) gelecek
             if (!item.pId || item.buHafta <= 0) continue;
 
             await PersonelHareket.create({
                 personelId: item.pId,
                 islemTipi: 'Ödeme',
                 tutar: -item.buHafta,
-                aciklama: `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş Ödemesi`
+                aciklama: baslik // Artık burada "paket ismi" yazacak
             });
             await Personel.findByIdAndUpdate(item.pId, { $inc: { bakiye: -item.buHafta } });
         }
-        res.status(200).json({ mesaj: "Ödemeler başarıyla sisteme işlendi." });
+        res.status(200).json({ mesaj: "Ödeme paketi başarıyla arşivlendi." });
     } catch (hata) {
         res.status(500).json({ mesaj: "Ödeme işlemi başarısız.", detay: hata.message });
     }
