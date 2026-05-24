@@ -112,12 +112,12 @@ const haftalikAnalizGetir = async (req, res) => {
 const topluOdemeYap = async (req, res) => {
     try {
         const { list, paketIsmi } = req.body;
-        const baslik = paketIsmi || `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş Ödemesi`;
+        const baslik = paketIsmi || `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş`;
 
         for (const item of list) {
             if (!item.pId || item.buHafta <= 0) continue;
 
-            // 1. Personel Hareket Kaydı
+            // 1. Personel Hareket (Bunu bir deneyelim)
             await PersonelHareket.create({
                 personelId: item.pId,
                 islemTipi: 'Ödeme',
@@ -125,28 +125,16 @@ const topluOdemeYap = async (req, res) => {
                 aciklama: baslik
             });
 
-            // 2. Personel Bakiyesini Güncelle
+            // 2. Personel Bakiye
             await Personel.findByIdAndUpdate(item.pId, { $inc: { bakiye: -item.buHafta } });
-
-            // 3. Kasa Kaydı (HATA BURADA MI?)
-            try {
-                // Eğer model ismi "Odeme" değilse burası patlar
-                await Odeme.create({
-                    tutar: item.buHafta,
-                    aciklama: `${baslik} - Personel Ödemesi`,
-                    tip: 'Gider',
-                    tarih: new Date()
-                });
-            } catch (err) {
-                console.error("KASA KAYIT HATASI:", err);
-                throw new Error("Kasa modeli kaydı başarısız: " + err.message);
-            }
         }
-        res.status(200).json({ mesaj: "Ödemeler başarıyla sisteme işlendi." });
+
+        // Şimdilik Kasa kısmını devre dışı bıraktık.
+        // Eğer bu şekilde çalışırsa, hata Kasa modelindedir.
+        res.status(200).json({ mesaj: "Ödemeler başarıyla sisteme işlendi (Kasa kaydı şimdilik atlandı)." });
     } catch (hata) {
-        console.error("ANA ÖDEME HATASI:", hata);
-        // Buradan dönecek detay hatayı bana ilet
-        res.status(500).json({ mesaj: "Hata:", detay: hata.message });
+        console.error("KRİTİK HATA:", hata);
+        res.status(500).json({ mesaj: "Hata oluştu", detay: hata.message });
     }
 };
 
