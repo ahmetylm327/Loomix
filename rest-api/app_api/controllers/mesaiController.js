@@ -111,9 +111,7 @@ const haftalikAnalizGetir = async (req, res) => {
 const topluOdemeYap = async (req, res) => {
     try {
         const { list, paketIsmi } = req.body;
-        const baslik = paketIsmi || `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş`;
-
-        let toplamOdeme = 0;
+        const baslik = paketIsmi || `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş Ödemesi`;
 
         for (const item of list) {
             if (!item.pId || item.buHafta <= 0) continue;
@@ -129,20 +127,25 @@ const topluOdemeYap = async (req, res) => {
             // 2. Personel Bakiyesini Güncelle
             await Personel.findByIdAndUpdate(item.pId, { $inc: { bakiye: -item.buHafta } });
 
-            // 3. KASA GÜNCELLEME (Önemli: Burası kasada görünecek)
-            await Odeme.create({
-                tutar: item.buHafta,
-                aciklama: `${baslik} - Personel Ödemesi`,
-                tip: 'Gider', // veya sistemindeki kasa modeli neyse
-                tarih: new Date()
-            });
-
-            toplamOdeme += item.buHafta;
+            // 3. Kasa Kaydı (HATA BURADA MI?)
+            try {
+                // Eğer model ismi "Odeme" değilse burası patlar
+                await Odeme.create({
+                    tutar: item.buHafta,
+                    aciklama: `${baslik} - Personel Ödemesi`,
+                    tip: 'Gider',
+                    tarih: new Date()
+                });
+            } catch (err) {
+                console.error("KASA KAYIT HATASI:", err);
+                throw new Error("Kasa modeli kaydı başarısız: " + err.message);
+            }
         }
-
-        res.status(200).json({ mesaj: "Ödemeler başarıyla kasaya işlendi." });
+        res.status(200).json({ mesaj: "Ödemeler başarıyla sisteme işlendi." });
     } catch (hata) {
-        res.status(500).json({ mesaj: "Ödeme işlemi başarısız.", detay: hata.message });
+        console.error("ANA ÖDEME HATASI:", hata);
+        // Buradan dönecek detay hatayı bana ilet
+        res.status(500).json({ mesaj: "Hata:", detay: hata.message });
     }
 };
 
