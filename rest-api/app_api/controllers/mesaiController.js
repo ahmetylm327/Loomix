@@ -131,4 +131,23 @@ const topluOdemeYap = async (req, res) => {
     }
 };
 
-module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir, topluOdemeYap };
+const gecmisOdemeleriGetir = async (req, res) => {
+    try {
+        // 'Ödeme' tipiyle kaydedilmiş tüm hareketleri paket ismine göre grupla
+        const paketler = await PersonelHareket.aggregate([
+            { $match: { islemTipi: 'Ödeme' } },
+            {
+                $group: {
+                    _id: "$aciklama",
+                    toplam: { $sum: { $abs: "$tutar" } },
+                    tarih: { $first: "$islemTarihi" },
+                    detaylar: { $push: "$$ROOT" }
+                }
+            },
+            { $sort: { tarih: -1 } }
+        ]);
+        res.status(200).json(paketler);
+    } catch (e) { res.status(500).json({ mesaj: "Arşiv alınamadı" }); }
+};
+
+module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir, topluOdemeYap, gecmisOdemeleriGetir };
