@@ -1,12 +1,12 @@
 const mongoose = require('mongoose');
 const xlsx = require('xlsx');
 const fs = require('fs');
-const dayjs = require('dayjs'); // dayjs'i unutma
+const dayjs = require('dayjs');
 
 const Personel = mongoose.model('Personel');
-const PersonelHareket = mongoose.model('PersonelHareket'); // ✅ EKSİKTİ, EKLENDİ
+const PersonelHareket = mongoose.model('PersonelHareket');
 
-// 1. TOPLU TAHAKKUK
+// 1. TOPLU TAHAKKUK (EXCEL İLE)
 const mesaiYukle = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ description: "Dosya yüklenemedi!" });
@@ -40,7 +40,6 @@ const mesaiYukle = async (req, res) => {
                 personel.bakiye += toplamHakedis;
                 await personel.save();
 
-                // Hakediş hareketini kaydet
                 await PersonelHareket.create({
                     personelId: personel._id,
                     islemTipi: 'Hakediş',
@@ -53,7 +52,6 @@ const mesaiYukle = async (req, res) => {
                 sonuclar.sistemdeBulunamayanlar.push({ isim: isim, gun: calisilanGunSayisi });
             }
         }
-
         fs.unlinkSync(req.file.path);
         res.status(200).json({ mesaj: "Puantaj işlendi.", ozet: sonuclar });
     } catch (hata) {
@@ -62,7 +60,35 @@ const mesaiYukle = async (req, res) => {
     }
 };
 
-// 2. HAFTALIK ANALİZ (500 HATASINI ÖNLEYEN GÜVENLİ SORGULAMA)
+// 2. TEKLİ / MANUEL TAHAKKUK
+const hakedisHesapla = async (req, res) => {
+    try {
+        const id = req.params.employeeId;
+        const { calculation_date, period_type, calisilanGunManuel } = req.body;
+
+        const personel = await Personel.findById(id);
+        if (!personel) return res.status(404).json({ description: "Personel Bulunamadı" });
+
+        let calisilanGun = calisilanGunManuel ? Number(calisilanGunManuel) : (period_type === "Aylık" ? 26 : (period_type === "Haftalık" ? 6 : 1));
+        const toplamHakedis = calisilanGun * (personel.ucretMiktari || 0);
+
+        personel.bakiye += toplamHakedis;
+        await personel.save();
+
+        await PersonelHareket.create({
+            personelId: personel._id,
+            islemTipi: 'Hakediş',
+            tutar: toplamHakedis,
+            aciklama: `Manuel Tahakkuk: ${calisilanGun} Gün`
+        });
+
+        res.status(200).json({ mesaj: "Tahakkuk eklendi.", yeni_bakiye: personel.bakiye });
+    } catch (hata) {
+        res.status(400).json({ description: "Hata", detay: hata.message });
+    }
+};
+
+// 3. HAFTALIK ANALİZ
 const haftalikAnalizGetir = async (req, res) => {
     try {
         const tarihSiniri = new Date();
@@ -71,11 +97,9 @@ const haftalikAnalizGetir = async (req, res) => {
         const hareketler = await PersonelHareket.find({
             islemTipi: 'Hakediş',
             islemTarihi: { $gte: tarihSiniri }
-        }).populate('personelId', 'adSoyad aktifMi'); // aktifMi bilgisini de alıyoruz
+        }).populate('personelId', 'adSoyad aktifMi');
 
-        // SADECE PERSONELİ BULUNAN VE AKTİF OLANLARI FİLTRELE
         const gecerliHareketler = hareketler.filter(h => h.personelId && h.personelId.aktifMi === true);
-
         res.status(200).json(gecerliHareketler);
     } catch (hata) {
         console.error("ANALİZ HATASI:", hata);
@@ -83,7 +107,7 @@ const haftalikAnalizGetir = async (req, res) => {
     }
 };
 
-// 3. TOPLU ÖDEME
+// 4. TOPLU ÖDEME
 const topluOdemeYap = async (req, res) => {
     try {
         const { list } = req.body;
