@@ -43,6 +43,7 @@ router.post('/payroll/:employeeId/calculate', ctrlMesai.hakedisHesapla);
 router.get('/attendance/settings', ctrlPuantaj.ayarlarıGetir);
 router.post('/attendance/settings', ctrlPuantaj.ayarlarıGuncelle);
 router.get('/mesai/haftalik-analiz', ctrlMesai.haftalikAnalizGetir);
+router.post('/mesai/toplu-odeme', ctrlMesai.topluOdemeYap);
 // ---------------------------------------------------------
 // ⚙️ ÜRETİM ROTALARI
 // ---------------------------------------------------------
