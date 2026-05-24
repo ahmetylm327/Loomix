@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, message, Tag, Button } from 'antd';
+import { Card, Table, message, Tag, Button, Typography } from 'antd';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
+
+const { Text } = Typography;
 
 const MaasYonetimi = () => {
     const [veriler, setVeriler] = useState([]);
@@ -19,16 +21,17 @@ const MaasYonetimi = () => {
         finally { setLoading(false); }
     };
 
-    // Veriyi işleyip kıyaslama tablosuna hazırla
     const analizTablosu = () => {
         const simdi = dayjs();
         const personelMap = {};
 
         veriler.forEach(h => {
+            // Backend'den gelen pId'yi buraya aktarıyoruz
             const pId = h.personelId._id;
-            if (!personelMap[pId]) personelMap[pId] = { isim: h.personelId.adSoyad, gecenHafta: 0, buHafta: 0 };
+            if (!personelMap[pId]) {
+                personelMap[pId] = { pId, isim: h.personelId.adSoyad, gecenHafta: 0, buHafta: 0 };
+            }
 
-            // Tarih kontrolü
             if (dayjs(h.islemTarihi).isBefore(simdi.subtract(7, 'day'))) {
                 personelMap[pId].gecenHafta += h.tutar;
             } else {
@@ -38,35 +41,49 @@ const MaasYonetimi = () => {
         return Object.values(personelMap);
     };
 
+    const topluOdemeYap = async () => {
+        try {
+            const list = analizTablosu();
+            // Backend'in beklediği yapıya göre gönderiyoruz
+            await axiosInstance.post('/mesai/toplu-odeme', { list });
+            message.success("Ödemeler kaydedildi!");
+            fetchAnaliz();
+        } catch (e) { message.error("Ödeme kaydedilemedi."); }
+    };
+
+    const data = analizTablosu();
+    const toplamTalep = data.reduce((acc, curr) => acc + (curr.buHafta - curr.gecenHafta), 0);
+
     const columns = [
         { title: 'Personel', dataIndex: 'isim', key: 'isim' },
-        { title: 'Geçen Hafta Ödenen', dataIndex: 'gecenHafta', render: v => `${v.toLocaleString()} ₺` },
-        { title: 'Bu Hafta Hakedilen', dataIndex: 'buHafta', render: v => `${v.toLocaleString()} ₺` },
+        { title: 'Geçen Hafta', dataIndex: 'gecenHafta', render: v => `${v.toLocaleString()} ₺` },
+        { title: 'Bu Hafta Hakediş', dataIndex: 'buHafta', render: v => `${v.toLocaleString()} ₺` },
         {
-            title: 'Fark (Talep Edilecek)', key: 'fark', render: r => {
+            title: 'Fark (Talep)', key: 'fark', render: r => {
                 const fark = r.buHafta - r.gecenHafta;
                 return <Tag color={fark > 0 ? 'green' : 'red'}>{fark.toLocaleString()} ₺</Tag>
             }
         }
     ];
 
-    const topluOdemeYap = async () => {
-        try {
-            const analiz = analizTablosu();
-            // Backend'de bir rota oluşturup tüm personellere 'Ödeme' kaydı atacağız
-            await axiosInstance.post('/mesai/toplu-odeme', { list: analiz });
-            message.success("Tüm ödemeler kaydedildi ve bakiyeler güncellendi.");
-            fetchAnaliz(); // Listeyi yenile
-        } catch (e) {
-            message.error("Ödeme kaydedilemedi.");
-        }
-    };
-
     return (
-        <Card title="Cuma Günü Maaş Analizi" style={{ margin: 20 }} extra={
-            <Button type="primary" onClick={topluOdemeYap}>Bu Haftayı Öde ve Kaydet</Button>
+        <Card title="Haftalık Maaş Yönetimi" style={{ margin: 20 }} extra={
+            <Button type="primary" onClick={topluOdemeYap} disabled={data.length === 0}>
+                Bu Haftayı Öde ve Kaydet
+            </Button>
         }>
-            <Table dataSource={analizTablosu()} columns={columns} loading={loading} rowKey="isim" />
+            <Table
+                dataSource={data}
+                columns={columns}
+                loading={loading}
+                rowKey="pId"
+                summary={() => (
+                    <Table.Summary.Row>
+                        <Table.Summary.Cell colSpan={3} align="right"><Text strong>Müşteriden İstenmesi Gereken Toplam:</Text></Table.Summary.Cell>
+                        <Table.Summary.Cell><Text strong type="success">{toplamTalep.toLocaleString()} ₺</Text></Table.Summary.Cell>
+                    </Table.Summary.Row>
+                )}
+            />
         </Card>
     );
 };
