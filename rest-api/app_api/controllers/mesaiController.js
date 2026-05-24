@@ -5,6 +5,7 @@ const dayjs = require('dayjs');
 
 const Personel = mongoose.model('Personel');
 const PersonelHareket = mongoose.model('PersonelHareket');
+const Odeme = mongoose.model('Odeme');
 
 // 1. TOPLU TAHAKKUK (EXCEL İLE)
 const mesaiYukle = async (req, res) => {
