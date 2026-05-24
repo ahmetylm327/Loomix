@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, message, Tag, Button, Typography, Input, InputNumber, Space, Tabs, Modal } from 'antd';
+import { Card, Table, message, Tag, Button, Typography, Input, InputNumber, Space, Tabs, Modal, Spin } from 'antd';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 
@@ -12,8 +12,8 @@ const MaasYonetimi = () => {
     const [loading, setLoading] = useState(true);
     const [paketIsmi, setPaketIsmi] = useState(`Haftalık Maaş - ${dayjs().format('DD/MM/YYYY')}`);
 
-    // Detay Modal State'leri
     const [isModalVisible, setIsModalVisible] = useState(false);
+    const [modalLoading, setModalLoading] = useState(false); // Modal içi loading
     const [seciliPaketDetaylari, setSeciliPaketDetaylari] = useState([]);
 
     useEffect(() => {
@@ -26,6 +26,7 @@ const MaasYonetimi = () => {
         try {
             const res = await axiosInstance.get('/mesai/haftalik-analiz');
             const processed = Object.values(res.data.reduce((acc, h) => {
+                if (!h.personelId) return acc;
                 const pId = h.personelId._id;
                 if (!acc[pId]) acc[pId] = { pId, isim: h.personelId.adSoyad, gecenHafta: 0, buHafta: 0 };
                 if (dayjs(h.islemTarihi).isBefore(dayjs().subtract(7, 'day'))) {
@@ -48,12 +49,17 @@ const MaasYonetimi = () => {
     };
 
     const detayGoster = async (paketAdi) => {
+        setModalLoading(true);
+        setIsModalVisible(true);
         try {
-            // encodeURIComponent ile slash ve boşlukları URL dostu hale getiriyoruz
             const res = await axiosInstance.get(`/mesai/arsiv/${encodeURIComponent(paketAdi)}`);
             setSeciliPaketDetaylari(res.data);
-            setIsModalVisible(true);
-        } catch (e) { message.error("Detaylar alınamadı."); }
+        } catch (e) {
+            message.error("Detaylar alınamadı.");
+            setIsModalVisible(false);
+        } finally {
+            setModalLoading(false);
+        }
     };
 
     const arsivSil = async (paketAdi) => {
@@ -61,7 +67,6 @@ const MaasYonetimi = () => {
             title: 'Bu arşivi silmek istediğine emin misin?',
             onOk: async () => {
                 try {
-                    // Burada da aynı şekilde encode ediyoruz
                     await axiosInstance.delete(`/mesai/arsiv/${encodeURIComponent(paketAdi)}`);
                     message.success("Arşiv silindi.");
                     fetchArsiv();
@@ -123,11 +128,21 @@ const MaasYonetimi = () => {
                     ]} />
                 </TabPane>
             </Tabs>
-            <Modal title="Ödeme Detayları" visible={isModalVisible} onCancel={() => setIsModalVisible(false)} footer={null}>
-                <Table dataSource={seciliPaketDetaylari} rowKey="_id" columns={[
-                    { title: 'Personel', dataIndex: ['personelId', 'adSoyad'] },
-                    { title: 'Ödenen Tutar', dataIndex: 'tutar', render: v => `${Math.abs(v).toLocaleString()} ₺` }
-                ]} pagination={false} />
+
+            {/* Modal'da 'open' kullanıldı */}
+            <Modal
+                title="Ödeme Detayları"
+                open={isModalVisible}
+                onCancel={() => setIsModalVisible(false)}
+                footer={null}
+                width={600}
+            >
+                {modalLoading ? <Spin /> : (
+                    <Table dataSource={seciliPaketDetaylari} rowKey="_id" columns={[
+                        { title: 'Personel', dataIndex: ['personelId', 'adSoyad'] },
+                        { title: 'Ödenen Tutar', dataIndex: 'tutar', render: v => `${Math.abs(v).toLocaleString()} ₺` }
+                    ]} pagination={false} />
+                )}
             </Modal>
         </Card>
     );
