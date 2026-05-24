@@ -45,6 +45,8 @@ router.post('/attendance/settings', ctrlPuantaj.ayarlarıGuncelle);
 router.get('/mesai/haftalik-analiz', ctrlMesai.haftalikAnalizGetir);
 router.post('/mesai/toplu-odeme', ctrlMesai.topluOdemeYap);
 router.get('/mesai/gecmis-odemeler', ctrlMesai.gecmisOdemeleriGetir);
+router.delete('/mesai/arsiv/:paketAdi', ctrlMesai.arsivSil);
+router.get('/mesai/arsiv/:paketAdi', ctrlMesai.paketDetayGetir);
 // ---------------------------------------------------------
 // ⚙️ ÜRETİM ROTALARI
 // ---------------------------------------------------------

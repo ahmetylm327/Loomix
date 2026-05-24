@@ -150,4 +150,23 @@ const gecmisOdemeleriGetir = async (req, res) => {
     } catch (e) { res.status(500).json({ mesaj: "Arşiv alınamadı" }); }
 };
 
-module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir, topluOdemeYap, gecmisOdemeleriGetir };
+const arsivSil = async (req, res) => {
+    try {
+        const { paketAdi } = req.params;
+        // O pakete ait tüm 'Ödeme' kayıtlarını sil
+        await PersonelHareket.deleteMany({ islemTipi: 'Ödeme', aciklama: paketAdi });
+        res.status(200).json({ mesaj: "Arşiv silindi." });
+    } catch (e) { res.status(500).json({ mesaj: "Silme başarısız." }); }
+};
+
+// 6. PAKET DETAYLARINI GÖRME
+const paketDetayGetir = async (req, res) => {
+    try {
+        const { paketAdi } = req.params;
+        const detaylar = await PersonelHareket.find({ islemTipi: 'Ödeme', aciklama: paketAdi })
+            .populate('personelId', 'adSoyad');
+        res.status(200).json(detaylar);
+    } catch (e) { res.status(500).json({ mesaj: "Detaylar alınamadı." }); }
+};
+
+module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir, topluOdemeYap, gecmisOdemeleriGetir, arsivSil, paketDetayGetir };

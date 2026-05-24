@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, message, Tag, Button, Typography, Input, InputNumber, Space, Tabs } from 'antd';
+import { Card, Table, message, Tag, Button, Typography, Input, InputNumber, Space, Tabs, Modal } from 'antd';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 
@@ -11,6 +11,10 @@ const MaasYonetimi = () => {
     const [arsiv, setArsiv] = useState([]);
     const [loading, setLoading] = useState(true);
     const [paketIsmi, setPaketIsmi] = useState(`Haftalık Maaş - ${dayjs().format('DD/MM/YYYY')}`);
+
+    // Detay Modal State'leri
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [seciliPaketDetaylari, setSeciliPaketDetaylari] = useState([]);
 
     useEffect(() => {
         fetchAnaliz();
@@ -43,13 +47,34 @@ const MaasYonetimi = () => {
         } catch (e) { message.error("Arşiv yüklenemedi."); }
     };
 
+    const detayGoster = async (paketAdi) => {
+        try {
+            const res = await axiosInstance.get(`/mesai/arsiv/${paketAdi}`);
+            setSeciliPaketDetaylari(res.data);
+            setIsModalVisible(true);
+        } catch (e) { message.error("Detaylar alınamadı."); }
+    };
+
+    const arsivSil = async (paketAdi) => {
+        Modal.confirm({
+            title: 'Bu arşivi silmek istediğine emin misin?',
+            onOk: async () => {
+                try {
+                    await axiosInstance.delete(`/mesai/arsiv/${paketAdi}`);
+                    message.success("Arşiv silindi.");
+                    fetchArsiv();
+                } catch (e) { message.error("Silme başarısız."); }
+            }
+        });
+    };
+
     const topluOdemeYap = async () => {
         try {
             const list = veriler.map(v => ({ pId: v.pId, buHafta: v.duzenlenenTutar }));
             await axiosInstance.post('/mesai/toplu-odeme', { list, paketIsmi });
             message.success("Ödeme paketi başarıyla arşivlendi!");
             fetchAnaliz();
-            fetchArsiv(); // Arşivi güncelle
+            fetchArsiv();
         } catch (e) { message.error("Ödeme kaydedilemedi."); }
     };
 
@@ -62,9 +87,7 @@ const MaasYonetimi = () => {
                     <Card title="Yeni Ödeme Paketi Hazırla" extra={
                         <Space>
                             <Input value={paketIsmi} onChange={e => setPaketIsmi(e.target.value)} style={{ width: 250 }} />
-                            <Button type="primary" onClick={topluOdemeYap} disabled={veriler.length === 0}>
-                                Bu Haftayı Öde ve Arşivle
-                            </Button>
+                            <Button type="primary" onClick={topluOdemeYap} disabled={veriler.length === 0}>Bu Haftayı Öde ve Arşivle</Button>
                         </Space>
                     }>
                         <Table dataSource={veriler} rowKey="pId" pagination={false} columns={[
@@ -86,10 +109,24 @@ const MaasYonetimi = () => {
                     <Table dataSource={arsiv} rowKey="_id" columns={[
                         { title: 'Paket Adı', dataIndex: '_id' },
                         { title: 'Tarih', dataIndex: 'tarih', render: v => dayjs(v).format('DD/MM/YYYY') },
-                        { title: 'Toplam Ödenen', dataIndex: 'toplam', render: v => `${v.toLocaleString()} ₺` }
+                        { title: 'Toplam Ödenen', dataIndex: 'toplam', render: v => `${Math.abs(v).toLocaleString()} ₺` },
+                        {
+                            title: 'İşlemler', render: (text, r) => (
+                                <Space>
+                                    <Button size="small" onClick={() => detayGoster(r._id)}>Detaylar</Button>
+                                    <Button size="small" danger onClick={() => arsivSil(r._id)}>Sil</Button>
+                                </Space>
+                            )
+                        }
                     ]} />
                 </TabPane>
             </Tabs>
+            <Modal title="Ödeme Detayları" visible={isModalVisible} onCancel={() => setIsModalVisible(false)} footer={null}>
+                <Table dataSource={seciliPaketDetaylari} rowKey="_id" columns={[
+                    { title: 'Personel', dataIndex: ['personelId', 'adSoyad'] },
+                    { title: 'Ödenen Tutar', dataIndex: 'tutar', render: v => `${Math.abs(v).toLocaleString()} ₺` }
+                ]} pagination={false} />
+            </Modal>
         </Card>
     );
 };
