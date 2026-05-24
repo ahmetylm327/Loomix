@@ -49,7 +49,8 @@ const MaasYonetimi = () => {
 
     const detayGoster = async (paketAdi) => {
         try {
-            const res = await axiosInstance.get(`/mesai/arsiv/${paketAdi}`);
+            // encodeURIComponent ile slash ve boşlukları URL dostu hale getiriyoruz
+            const res = await axiosInstance.get(`/mesai/arsiv/${encodeURIComponent(paketAdi)}`);
             setSeciliPaketDetaylari(res.data);
             setIsModalVisible(true);
         } catch (e) { message.error("Detaylar alınamadı."); }
@@ -60,7 +61,8 @@ const MaasYonetimi = () => {
             title: 'Bu arşivi silmek istediğine emin misin?',
             onOk: async () => {
                 try {
-                    await axiosInstance.delete(`/mesai/arsiv/${paketAdi}`);
+                    // Burada da aynı şekilde encode ediyoruz
+                    await axiosInstance.delete(`/mesai/arsiv/${encodeURIComponent(paketAdi)}`);
                     message.success("Arşiv silindi.");
                     fetchArsiv();
                 } catch (e) { message.error("Silme başarısız."); }
