@@ -15,6 +15,7 @@ const ctrlRapor = require('../controllers/raporController');
 const ctrlTahmin = require('../controllers/tahminController');
 const ctrlPuantaj = require('../controllers/puantajController');
 const ctrlStats = require('../controllers/statsController');
+const ctrlDenetim = require('../controllers/denetimController');
 
 // ---------------------------------------------------------
 // 👥 PERSONEL ROTALARI
@@ -48,6 +49,7 @@ router.get('/mesai/gecmis-odemeler', ctrlMesai.gecmisOdemeleriGetir);
 router.delete('/mesai/arsiv/:paketAdi', ctrlMesai.arsivSil);
 router.get('/mesai/arsiv/:paketAdi', ctrlMesai.paketDetayGetir);
 router.put('/mesai/arsiv', ctrlMesai.arsivGuncelle);
+
 // ---------------------------------------------------------
 // ⚙️ ÜRETİM ROTALARI
 // ---------------------------------------------------------
@@ -94,5 +96,6 @@ router.post('/estimates/ai-forecast', ctrlTahmin.tahminYap);
 // ---------------------------------------------------------
 router.post('/kayit', ctrlAuth.kayitOl);
 router.post('/auth/login', ctrlAuth.girisYap);
+router.get('/denetim/rapor', ctrlDenetim.denetimYap);
 
 module.exports = router;

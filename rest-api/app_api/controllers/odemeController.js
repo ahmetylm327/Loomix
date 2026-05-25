@@ -75,7 +75,12 @@ const odemeEkle = async (req, res) => {
 // 2. ÖDEME LİSTELE
 const odemeListele = async (req, res) => {
     try {
-        const odemeler = await Odeme.find().sort({ odemeTarihi: -1, _id: -1 });
+        // Sadece 'Nakit' veya 'Banka' ile yapılan ödemeleri getir.
+        // Fiş/Üretim ile ilgili "Otomatik Mahsup" olanları KASA listesinden çıkart.
+        const odemeler = await Odeme.find({
+            notlar: { $not: /Otomatik Mahsup/ }
+        }).sort({ odemeTarihi: -1 });
+
         res.status(200).json(odemeler);
     } catch (hata) {
         res.status(500).json({ detay: hata.message });
