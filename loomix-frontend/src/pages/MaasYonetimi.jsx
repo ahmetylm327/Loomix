@@ -28,6 +28,7 @@ const MaasYonetimi = () => {
                 if (!h.personelId) return acc;
                 const pId = h.personelId._id;
                 if (!acc[pId]) acc[pId] = { pId, isim: h.personelId.adSoyad, buHafta: 0 };
+                // Sadece son 7 günün toplamı
                 if (!dayjs(h.islemTarihi).isBefore(dayjs().subtract(7, 'day'))) {
                     acc[pId].buHafta += h.tutar;
                 }
@@ -50,31 +51,31 @@ const MaasYonetimi = () => {
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Maaslar");
-        // Türkçe karakter sorunu için dosya çıktısı
         XLSX.writeFile(wb, `${paketIsmi}.xlsx`, { bookType: 'xlsx', type: 'binary' });
     };
 
     const topluOdemeYap = async () => {
         if (arsiv.some(a => a._id === paketIsmi)) {
-            message.error("Bu haftayı zaten ödediniz!");
+            message.error("Bu haftayı zaten ödediniz! Lütfen yeni bir paket ismi girin.");
             return;
         }
 
         Modal.confirm({
             title: 'Ödemeleri Onayla',
-            content: `"${paketIsmi}" paketini onaylıyor musun?`,
+            content: `"${paketIsmi}" paketini onaylıyor musun? Manuel yapılan tüm düzenlemeler personel ekstresine işlenecektir.`,
             onOk: async () => {
                 try {
-                    // Backend'e hem orijinal hem de senin düzenlediğin tutarı gönderiyoruz
+                    // Backend'e hem orijinal hesaplanan tutarı (buHafta) hem de senin düzenlediğin tutarı gönderiyoruz
                     const list = veriler.map(v => ({
                         pId: v.pId,
-                        buHafta: v.buHafta, // Sistem hesaplaması (Puantajdan gelen)
-                        duzenlenenTutar: v.duzenlenenTutar // Senin manuel müdahalen
+                        buHafta: v.buHafta,
+                        duzenlenenTutar: v.duzenlenenTutar
                     }));
 
                     await axiosInstance.post('/mesai/toplu-odeme', { list, paketIsmi });
-                    message.success("Ödemeler ve manuel hakedişler arşivlendi!");
-                    fetchAnaliz(); fetchArsiv();
+                    message.success("Ödemeler ve manuel hakedişler başarıyla arşivlendi!");
+                    fetchAnaliz();
+                    fetchArsiv();
                 } catch (e) { message.error("Ödeme kaydedilemedi."); }
             }
         });
@@ -120,7 +121,7 @@ const MaasYonetimi = () => {
                         <Table dataSource={veriler} rowKey="pId" pagination={false} columns={[
                             { title: 'Personel', dataIndex: 'isim' },
                             {
-                                title: 'Bu Hafta Hakediş', dataIndex: 'duzenlenenTutar', render: (val, r) => (
+                                title: 'Bu Hafta Hakediş (Düzenlenebilir)', dataIndex: 'duzenlenenTutar', render: (val, r) => (
                                     <InputNumber value={val} onChange={(v) => setVeriler(prev => prev.map(i => i.pId === r.pId ? { ...i, duzenlenenTutar: v } : i))} />
                                 )
                             }
