@@ -12,8 +12,8 @@ import {
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
+import ParaInput from '../pages/ParaInput';
 
-// Tarih aralığı filtresi için dayjs eklentisini aktifleştiriyoruz
 dayjs.extend(isBetween);
 
 const { Option } = Select;
@@ -34,7 +34,6 @@ const KasaDefteri = () => {
     const [stats, setStats] = useState({ toplamGelir: 0, toplamGider: 0, netBakiye: 0, toplamAlacak: 0 });
     const [seciliKategori, setSeciliKategori] = useState('');
 
-    // 🚀 FİLTRELEME STATE'LERİ
     const [dateRange, setDateRange] = useState(null);
     const [selectedFirma, setSelectedFirma] = useState(null);
 
@@ -61,7 +60,6 @@ const KasaDefteri = () => {
             setCariler(firmalar);
             setPersoneller(isciler);
 
-            // 1. Kasa İstatistikleri (Nakit)
             let gelir = 0;
             let gider = 0;
             kasalar = kasalar.map(k => ({ ...k, islemTuru: 'Kasa' }));
@@ -72,13 +70,11 @@ const KasaDefteri = () => {
                 else if (yon === 'Gider') gider += tutarVal;
             });
 
-            // 2. PİYASADAKİ GERÇEK ALACAK
             let gercekAlacak = 0;
             firmalar.forEach(firma => {
                 gercekAlacak += (Number(firma.bakiye) || 0);
             });
 
-            // 3. Fiş (Üretim) Formatlaması
             let formatliUretimler = uretimler.map(u => {
                 const uTutar = (u.quantity || 0) * (u.birimFiyat || 0);
                 return {
@@ -94,9 +90,6 @@ const KasaDefteri = () => {
                 };
             });
 
-            // 4. KONSOLİDE LİSTE VE SIRALAMA
-            let birlesikListe = [...kasalar, ...formatliUretimler];
-
             const siralamaAlgoritmasi = (a, b) => {
                 const dateA = a.odemeTarihi || a.paymentDate;
                 const dateB = b.odemeTarihi || b.paymentDate;
@@ -110,6 +103,8 @@ const KasaDefteri = () => {
                 const idB = b._id?.toString() || b.transactionId?.toString() || "";
                 return idB.localeCompare(idA);
             };
+
+            let birlesikListe = [...kasalar, ...formatliUretimler];
 
             kasalar.sort(siralamaAlgoritmasi);
             formatliUretimler.sort(siralamaAlgoritmasi);
@@ -133,7 +128,6 @@ const KasaDefteri = () => {
         }
     };
 
-    // 🚀 TABLOLAR İÇİN FİLTRELEME MANTIĞI
     const filtreleData = (dataList) => {
         return dataList.filter(item => {
             let dateMatch = true;
@@ -145,7 +139,6 @@ const KasaDefteri = () => {
             }
 
             if (selectedFirma) {
-                // Kasa işlemleri 'relatedId' kullanır, Üretim fişleri 'cariId' kullanır
                 const rId = typeof item.relatedId === 'object' ? item.relatedId?._id : item.relatedId;
                 const cId = typeof item.cariId === 'object' ? item.cariId?._id : item.cariId;
                 firmaMatch = (rId === selectedFirma) || (cId === selectedFirma);
@@ -215,7 +208,6 @@ const KasaDefteri = () => {
             key: 'detay',
             render: (_, record) => {
                 const islemKategori = record.kategori || record.category;
-
                 let muhatapAdi = 'Genel / Muhtelif İşlem';
                 let renk = '#8c8c8c';
 
@@ -243,29 +235,30 @@ const KasaDefteri = () => {
 
                 return (
                     <div>
-                        <b style={{ fontSize: '14px', color: renk }}>
-                            {muhatapAdi}
-                        </b><br />
+                        <b style={{ fontSize: '14px', color: renk }}>{muhatapAdi}</b><br />
                         <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
                             {record.odemeTarihi || record.paymentDate ? dayjs(record.odemeTarihi || record.paymentDate).format('DD.MM.YYYY') : '-'} - {islemKategori || 'Genel'}
                         </span>
-
                         {gosterilecekNot && (
                             <div style={{
-                                fontSize: '11px', color: '#595959', fontStyle: 'italic', marginTop: 4, whiteSpace: 'normal',
-                                wordBreak: 'break-word', background: '#fafafa', padding: '4px 6px', borderRadius: '4px', borderLeft: '2px solid #d9d9d9'
+                                fontSize: '11px', color: '#595959', fontStyle: 'italic', marginTop: 4,
+                                whiteSpace: 'normal', wordBreak: 'break-word',
+                                background: '#fafafa', padding: '4px 6px', borderRadius: '4px', borderLeft: '2px solid #d9d9d9'
                             }}>
                                 {gosterilecekNot}
                             </div>
                         )}
-
                         <div style={{ marginTop: 6 }}>
                             {record.islemTuru === 'Uretim' ? (
                                 <Tag color="purple" icon={<FileTextOutlined />} style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px' }}>
                                     KESİLEN FİŞ (ALACAK)
                                 </Tag>
                             ) : (
-                                <Tag color={tip === 'Gelir' ? 'success' : 'error'} icon={tip === 'Gelir' ? <ArrowUpOutlined /> : <ArrowDownOutlined />} style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px' }}>
+                                <Tag
+                                    color={tip === 'Gelir' ? 'success' : 'error'}
+                                    icon={tip === 'Gelir' ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+                                    style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px' }}
+                                >
                                     {tip === 'Gelir' ? 'TAHSİLAT (KASA)' : 'ÖDEME (KASA)'}
                                 </Tag>
                             )}
@@ -279,7 +272,7 @@ const KasaDefteri = () => {
             key: 'tutar',
             align: 'right',
             render: (_, record) => {
-                const tutarVal = record.tutar || record.amount;
+                const tutarVal = record.tutar || record.amount || 0;
                 const tip = record.islemYonu || record.transactionType;
 
                 let mRenk = '#595959';
@@ -291,7 +284,7 @@ const KasaDefteri = () => {
 
                 return (
                     <b style={{ color: mRenk, fontSize: '15px' }}>
-                        {isaret}{tutarVal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                        {isaret}{tutarVal?.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
                     </b>
                 );
             }
@@ -352,17 +345,38 @@ const KasaDefteri = () => {
             <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
                 <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ borderLeft: '5px solid #1890ff', background: '#e6f7ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <Statistic title={<span style={{ fontWeight: 'bold' }}>1. Kasa (Sıcak Nakit)</span>} value={stats.netBakiye} precision={2} styles={{ content: { color: '#1890ff', fontWeight: 'bold' } }} prefix={<WalletOutlined />} suffix="₺" />
+                        <Statistic
+                            title={<span style={{ fontWeight: 'bold' }}>1. Kasa (Sıcak Nakit)</span>}
+                            value={stats.netBakiye}
+                            precision={2}
+                            styles={{ content: { color: '#1890ff', fontWeight: 'bold' } }}
+                            prefix={<WalletOutlined />}
+                            suffix="₺"
+                        />
                     </Card>
                 </Col>
                 <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ borderLeft: '5px solid #722ed1', background: '#f9f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <Statistic title={<span style={{ fontWeight: 'bold' }}>2. Piyasada Bekleyen (Alacaklar)</span>} value={stats.toplamAlacak} precision={2} styles={{ content: { color: '#722ed1', fontWeight: 'bold' } }} prefix={<FileTextOutlined />} suffix="₺" />
+                        <Statistic
+                            title={<span style={{ fontWeight: 'bold' }}>2. Piyasada Bekleyen (Alacaklar)</span>}
+                            value={stats.toplamAlacak}
+                            precision={2}
+                            styles={{ content: { color: '#722ed1', fontWeight: 'bold' } }}
+                            prefix={<FileTextOutlined />}
+                            suffix="₺"
+                        />
                     </Card>
                 </Col>
                 <Col xs={24} sm={8}>
                     <Card variant="borderless" style={{ borderLeft: '5px solid #52c41a', background: '#f6ffed', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <Statistic title={<span style={{ fontWeight: 'bold' }}>3. ŞİRKET NET VARLIĞI (1 + 2)</span>} value={stats.netBakiye + stats.toplamAlacak} precision={2} styles={{ content: { color: '#52c41a', fontWeight: 'bold', fontSize: '24px' } }} prefix={<GlobalOutlined />} suffix="₺" />
+                        <Statistic
+                            title={<span style={{ fontWeight: 'bold' }}>3. ŞİRKET NET VARLIĞI (1 + 2)</span>}
+                            value={stats.netBakiye + stats.toplamAlacak}
+                            precision={2}
+                            styles={{ content: { color: '#52c41a', fontWeight: 'bold', fontSize: '24px' } }}
+                            prefix={<GlobalOutlined />}
+                            suffix="₺"
+                        />
                     </Card>
                 </Col>
             </Row>
@@ -383,16 +397,31 @@ const KasaDefteri = () => {
                     </Button>
                 </div>
 
-                {/* 🚀 FİLTRELEME ÇUBUĞU */}
                 <div style={{ background: '#fafafa', padding: '12px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #e8e8e8' }}>
                     <Row gutter={16} align="middle">
-                        <Col xs={24} sm={2}><b style={{ color: '#595959' }}><FilterOutlined /> Tabloyu Süz:</b></Col>
-                        <Col xs={24} sm={10}>
-                            <RangePicker style={{ width: '100%' }} format="DD.MM.YYYY" onChange={(dates) => setDateRange(dates)} placeholder={['Başlangıç Tarihi', 'Bitiş Tarihi']} />
+                        <Col xs={24} sm={2}>
+                            <b style={{ color: '#595959' }}><FilterOutlined /> Tabloyu Süz:</b>
                         </Col>
                         <Col xs={24} sm={10}>
-                            <Select style={{ width: '100%' }} placeholder="Firma Seçin (Tümü İçin Boş Bırakın)" allowClear showSearch optionFilterProp="children" onChange={(val) => setSelectedFirma(val)}>
-                                {cariler.map(cari => (<Option key={cari._id} value={cari._id}>{cari.firmaAdi}</Option>))}
+                            <RangePicker
+                                style={{ width: '100%' }}
+                                format="DD.MM.YYYY"
+                                onChange={(dates) => setDateRange(dates)}
+                                placeholder={['Başlangıç Tarihi', 'Bitiş Tarihi']}
+                            />
+                        </Col>
+                        <Col xs={24} sm={10}>
+                            <Select
+                                style={{ width: '100%' }}
+                                placeholder="Firma Seçin (Tümü İçin Boş Bırakın)"
+                                allowClear
+                                showSearch
+                                optionFilterProp="children"
+                                onChange={(val) => setSelectedFirma(val)}
+                            >
+                                {cariler.map(cari => (
+                                    <Option key={cari._id} value={cari._id}>{cari.firmaAdi}</Option>
+                                ))}
                             </Select>
                         </Col>
                     </Row>
@@ -402,17 +431,44 @@ const KasaDefteri = () => {
                     {
                         key: '1',
                         label: <span><WalletOutlined /> Sadece Kasa (Nakit)</span>,
-                        children: <Table columns={columns} dataSource={filtreleData(kasaData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                        children: (
+                            <Table
+                                columns={columns}
+                                dataSource={filtreleData(kasaData)}
+                                rowKey="_id"
+                                loading={loading}
+                                size="middle"
+                                pagination={{ pageSize: 10, size: 'small' }}
+                            />
+                        )
                     },
                     {
                         key: '2',
                         label: <span style={{ color: '#722ed1' }}><FileTextOutlined /> Sadece Fişler (Üretim)</span>,
-                        children: <Table columns={columns} dataSource={filtreleData(uretimData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                        children: (
+                            <Table
+                                columns={columns}
+                                dataSource={filtreleData(uretimData)}
+                                rowKey="_id"
+                                loading={loading}
+                                size="middle"
+                                pagination={{ pageSize: 10, size: 'small' }}
+                            />
+                        )
                     },
                     {
                         key: '3',
                         label: <span style={{ fontWeight: 'bold', color: '#1890ff' }}><GlobalOutlined /> BÜYÜK RESİM (Tümü)</span>,
-                        children: <Table columns={columns} dataSource={filtreleData(konsolideData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                        children: (
+                            <Table
+                                columns={columns}
+                                dataSource={filtreleData(konsolideData)}
+                                rowKey="_id"
+                                loading={loading}
+                                size="middle"
+                                pagination={{ pageSize: 10, size: 'small' }}
+                            />
+                        )
                     }
                 ]} />
             </Card>
@@ -438,7 +494,12 @@ const KasaDefteri = () => {
                         </Col>
                         <Col xs={24} sm={12}>
                             <Form.Item name="tutar" label="Tutar (₺)" rules={[{ required: true }]}>
-                                <InputNumber style={{ width: '100%' }} size="large" precision={2} min={0.01} />
+                                <InputNumber
+                                    style={{ width: '100%' }}
+                                    size="large"
+                                    precision={2}
+                                    min={0.01}
+                                />
                             </Form.Item>
                         </Col>
                     </Row>
