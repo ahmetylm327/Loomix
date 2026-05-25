@@ -6,9 +6,10 @@ const Personel = mongoose.model('Personel');
 let PersonelHareket;
 try { PersonelHareket = mongoose.model('PersonelHareket'); } catch (error) { }
 
-// KASA BAŞLANGIÇ TARİHİ (2026 öncesini görmezden gelerek hatayı sıfırlıyoruz)
+// KASA BAŞLANGIÇ TARİHİ (2026 öncesini kasanın bakiyesine dahil etmiyoruz)
 const KASA_BASLANGIC = new Date('2026-01-01');
 
+// 1. ÖDEME EKLE
 const odemeEkle = async (req, res) => {
     try {
         const { transactionType, islemYonu, paymentType, odemeTipi, amount, tutar, category, kategori, relatedId, ilgiliId, paymentDate, odemeTarihi, notes, notlar } = req.body;
@@ -33,6 +34,7 @@ const odemeEkle = async (req, res) => {
             notlar: gelenNotlar
         });
 
+        // Personel/Cari Bakiye Entegrasyonu
         if (gelenIlgiliId && gelenIlgiliId !== 'SAHSI_HARCAMA') {
             const isci = await Personel.findById(gelenIlgiliId).catch(() => null);
             if (isci) {
@@ -61,7 +63,6 @@ const odemeEkle = async (req, res) => {
             }
         }
 
-        // Sadece 2026 sonrasını alarak kasa bakiyesini hesapla
         const tumOdemeler = await Odeme.find({ odemeTarihi: { $gte: KASA_BASLANGIC } });
         let guncelKasa = tumOdemeler.reduce((acc, o) => o.islemYonu === 'Gelir' ? acc + o.tutar : acc - o.tutar, 0);
 
@@ -71,9 +72,9 @@ const odemeEkle = async (req, res) => {
     }
 };
 
+// 2. ÖDEME LİSTELE
 const odemeListele = async (req, res) => {
     try {
-        // Liste görünümünde tarih filtresi (Opsiyonel: Eğer geçmişi hiç görmemek istersen $gte filtresini aç)
         const odemeler = await Odeme.find().sort({ odemeTarihi: -1, _id: -1 });
         res.status(200).json(odemeler);
     } catch (hata) {
@@ -81,13 +82,16 @@ const odemeListele = async (req, res) => {
     }
 };
 
+// 3. ÖDEME GÜNCELLE
 const odemeGuncelle = async (req, res) => {
     try {
         const guncelOdeme = await Odeme.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!guncelOdeme) return res.status(404).json({ mesaj: "Kayıt bulunamadı." });
         res.status(200).json(guncelOdeme);
     } catch (hata) { res.status(400).json({ detay: hata.message }); }
 };
 
+// 4. ÖDEME SİL
 const odemeSil = async (req, res) => {
     try {
         const silinecekOdeme = await Odeme.findById(req.params.id);
