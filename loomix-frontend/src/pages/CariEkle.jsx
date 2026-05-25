@@ -1,8 +1,8 @@
 import React from 'react';
-import { Form, Input, Button, Row, Col, Card, Divider, message } from 'antd';
+import { Form, Input, Button, Row, Col, Card, Divider } from 'antd';
 import { SaveOutlined } from '@ant-design/icons';
 import { addCari } from "../api/cariService.js";
-import ParaInput from '../pages/ParaInput.jsx'; // Bileşenin bulunduğu doğru path'i kontrol et
+
 
 const CariKarti = () => {
     const [form] = Form.useForm();
@@ -11,22 +11,23 @@ const CariKarti = () => {
         try {
             console.log("Gönderilecek Mikro Uyumlu Veri:", values);
 
+            // Senin kendi yazdığın API fonksiyonunu çağırıyoruz:
             const res = await addCari(values);
 
-            message.success("Cari başarıyla eklendi!");
-            form.resetFields();
+            alert("Cari başarıyla eklendi!");
+            form.resetFields(); // Başarılı olunca formu temizle
         } catch (error) {
             console.error("Hata:", error);
-            message.error("Eklerken bir hata oluştu!");
+            alert("Eklerken bir hata oluştu!");
         }
     };
-
     return (
-        <Card title="Cari Tanıtım Kartı" variant="borderless" style={{ width: '100%', maxWidth: '900px', margin: '0 auto' }}>
+        <Card title="Cari Tanıtım Kartı " variant="borderless" style={{ width: '100%', maxWidth: '900px', margin: '0 auto' }}>
             <Form
                 form={form}
                 layout="vertical"
                 onFinish={onFinish}
+                // Mikro'daki gibi kompakt bir görünüm için:
                 size="middle"
             >
                 <Row gutter={16}>
@@ -71,12 +72,7 @@ const CariKarti = () => {
                 </Row>
 
                 <Row gutter={16}>
-                    <Col span={12}>
-                        <Form.Item label="Başlangıç Bakiyesi" name="bakiye">
-                            <ParaInput placeholder="0,00" />
-                        </Form.Item>
-                    </Col>
-                    <Col span={12}>
+                    <Col span={24}>
                         <Form.Item label="Açık Adres" name="adres">
                             <Input.TextArea rows={2} placeholder="Firma tam adresi..." />
                         </Form.Item>
@@ -95,4 +91,4 @@ const CariKarti = () => {
     );
 };
 
-export default CariKarti;
+export default CariKarti;    
