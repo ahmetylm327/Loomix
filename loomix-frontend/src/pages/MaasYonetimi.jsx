@@ -55,9 +55,8 @@ const MaasYonetimi = () => {
     };
 
     const topluOdemeYap = async () => {
-        // ÇİFT ÖDEME KORUMASI
         if (arsiv.some(a => a._id === paketIsmi)) {
-            message.error("Bu haftayı zaten ödediniz! Lütfen yeni bir paket ismi girin.");
+            message.error("Bu haftayı zaten ödediniz!");
             return;
         }
 
@@ -66,9 +65,15 @@ const MaasYonetimi = () => {
             content: `"${paketIsmi}" paketini onaylıyor musun?`,
             onOk: async () => {
                 try {
-                    const list = veriler.map(v => ({ pId: v.pId, buHafta: v.duzenlenenTutar }));
+                    // Backend'e hem orijinal hem de senin düzenlediğin tutarı gönderiyoruz
+                    const list = veriler.map(v => ({
+                        pId: v.pId,
+                        buHafta: v.buHafta, // Sistem hesaplaması (Puantajdan gelen)
+                        duzenlenenTutar: v.duzenlenenTutar // Senin manuel müdahalen
+                    }));
+
                     await axiosInstance.post('/mesai/toplu-odeme', { list, paketIsmi });
-                    message.success("Ödemeler arşivlendi!");
+                    message.success("Ödemeler ve manuel hakedişler arşivlendi!");
                     fetchAnaliz(); fetchArsiv();
                 } catch (e) { message.error("Ödeme kaydedilemedi."); }
             }

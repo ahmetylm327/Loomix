@@ -102,31 +102,51 @@ const topluOdemeYap = async (req, res) => {
         if (varmi) return res.status(400).json({ mesaj: "Bu haftayı zaten ödediniz!" });
 
         for (const item of list) {
-            if (!item.pId || item.buHafta <= 0) continue;
+            if (!item.pId || item.duzenlenenTutar <= 0) continue;
 
+            const personel = await Personel.findById(item.pId);
+
+            // 1. MANUEL DÜZENLEME FARKINI HESAPLA VE İŞLE
+            // (Senin manuel girdiğin tutar ile sistemin hesapladığı orijinal tutar farkı)
+            const fark = item.duzenlenenTutar - item.buHafta;
+            if (Math.abs(fark) > 0.01) {
+                await PersonelHareket.create({
+                    personelId: item.pId,
+                    islemTipi: 'Hakediş',
+                    tutar: fark,
+                    aciklama: `Manuel Düzenleme: ${paketIsmi}`
+                });
+                personel.bakiye += fark;
+            }
+
+            // 2. ÖDEME İŞLEMİNİ KAYDET
             await PersonelHareket.create({
                 personelId: item.pId,
                 islemTipi: 'Ödeme',
-                tutar: -item.buHafta,
+                tutar: -item.duzenlenenTutar,
                 aciklama: paketIsmi
             });
 
-            await Personel.findByIdAndUpdate(item.pId, { $inc: { bakiye: -item.buHafta } });
+            // 3. BAKİYEYİ GÜNCELLE
+            personel.bakiye -= item.duzenlenenTutar;
+            await personel.save();
 
-            // Kasa kaydını zorunlu alanlarıyla oluşturuyoruz
-            await Odeme.create({
-                islemYonu: 'Gider',
-                odemeTipi: 'Nakit/Banka',
-                tutar: item.buHafta,
-                kategori: 'Personel Maaşları',
-                ilgiliId: item.pId,
-                odemeTarihi: new Date(),
-                notlar: `${paketIsmi} - Personel Ödemesi`
-            });
+            // 4. KASA KAYDI
+            if (Odeme) {
+                await Odeme.create({
+                    islemYonu: 'Gider',
+                    odemeTipi: 'Nakit/Banka',
+                    tutar: item.duzenlenenTutar,
+                    kategori: 'Personel Maaşları',
+                    ilgiliId: item.pId,
+                    odemeTarihi: new Date(),
+                    notlar: `${paketIsmi} - Personel Ödemesi`
+                }).catch(() => { });
+            }
         }
-        res.status(200).json({ mesaj: "Ödemeler başarıyla sisteme işlendi." });
+        res.status(200).json({ mesaj: "Ödemeler ve düzenlemeler başarıyla işlendi." });
     } catch (hata) {
-        res.status(500).json({ mesaj: "Ödeme işlemi başarısız", detay: hata.message });
+        res.status(500).json({ mesaj: "Hata:", detay: hata.message });
     }
 };
 
