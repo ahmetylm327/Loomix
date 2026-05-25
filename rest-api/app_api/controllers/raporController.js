@@ -9,7 +9,7 @@ const gelismisBordroRaporu = async (req, res) => {
         const detayliListe = await Promise.all(personeller.map(async (p) => {
             const hareketler = await PersonelHareket.find({ personelId: p._id });
 
-            // 🚀 DÜZELTME: Sadece isimlere değil, tüm mutlak (abs) değerlere göre kusursuz toplama
+            // 🚀 Sadece isimlere değil, tüm mutlak (abs) değerlere göre kusursuz toplama
             const toplamHakedis = hareketler
                 .filter(h => h.islemTipi === 'Hakediş' || h.islemTipi === 'Avans İadesi' || h.islemTipi === 'Prim')
                 .reduce((acc, curr) => acc + Math.abs(curr.tutar), 0);
@@ -18,7 +18,9 @@ const gelismisBordroRaporu = async (req, res) => {
                 .filter(h => h.islemTipi === 'Ödeme' || h.islemTipi === 'Avans')
                 .reduce((acc, curr) => acc + Math.abs(curr.tutar), 0);
 
-            const bakiye = p.bakiye || 0;
+            // 🚀 DÜZELTME BURADA: Statik p.bakiye yerine, gerçek hareketlerden dinamik bakiye hesaplıyoruz.
+            // Bu sayede 17.000 Hakediş - 17.000 Ödeme tam olarak 0 sonucunu verecek.
+            const bakiye = toplamHakedis - toplamOdenen;
 
             return {
                 id: p._id,
@@ -33,6 +35,7 @@ const gelismisBordroRaporu = async (req, res) => {
         const genelOzet = {
             toplamBorc: detayliListe.reduce((acc, curr) => acc + curr.toplamHakedis, 0),
             toplamOdenen: detayliListe.reduce((acc, curr) => acc + curr.toplamOdenen, 0),
+            // netKalan da bu sayede otomatik olarak düzelmiş olacak:
             netKalan: detayliListe.reduce((acc, curr) => acc + curr.bakiye, 0)
         };
 
