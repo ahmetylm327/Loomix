@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, message, Tag, Button, Typography, Input, InputNumber, Space, Tabs, Modal, Spin } from 'antd';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 
 const { Text } = Typography;
 const { TabPane } = Tabs;
@@ -12,8 +13,9 @@ const MaasYonetimi = () => {
     const [loading, setLoading] = useState(true);
     const [paketIsmi, setPaketIsmi] = useState(`Haftalık Maaş - ${dayjs().format('DD/MM/YYYY')}`);
 
+    // Modal Durumları
     const [isModalVisible, setIsModalVisible] = useState(false);
-    const [modalLoading, setModalLoading] = useState(false); // Modal içi loading
+    const [modalLoading, setModalLoading] = useState(false);
     const [seciliPaketDetaylari, setSeciliPaketDetaylari] = useState([]);
 
     useEffect(() => {
@@ -28,10 +30,9 @@ const MaasYonetimi = () => {
             const processed = Object.values(res.data.reduce((acc, h) => {
                 if (!h.personelId) return acc;
                 const pId = h.personelId._id;
-                if (!acc[pId]) acc[pId] = { pId, isim: h.personelId.adSoyad, gecenHafta: 0, buHafta: 0 };
-                if (dayjs(h.islemTarihi).isBefore(dayjs().subtract(7, 'day'))) {
-                    acc[pId].gecenHafta += h.tutar;
-                } else {
+                if (!acc[pId]) acc[pId] = { pId, isim: h.personelId.adSoyad, buHafta: 0 };
+                // Sadece son 7 gün içindeki verileri topluyoruz
+                if (!dayjs(h.islemTarihi).isBefore(dayjs().subtract(7, 'day'))) {
                     acc[pId].buHafta += h.tutar;
                 }
                 return acc;
@@ -46,6 +47,14 @@ const MaasYonetimi = () => {
             const res = await axiosInstance.get('/mesai/gecmis-odemeler');
             setArsiv(res.data);
         } catch (e) { message.error("Arşiv yüklenemedi."); }
+    };
+
+    const exportToExcel = () => {
+        const data = veriler.map(v => ({ "Personel": v.isim, "Hakediş (₺)": v.duzenlenenTutar }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "HaftalıkMaas");
+        XLSX.writeFile(wb, `${paketIsmi}.xlsx`, { bookType: 'xlsx', type: 'binary' });
     };
 
     const detayGoster = async (paketAdi) => {
@@ -78,12 +87,12 @@ const MaasYonetimi = () => {
     const topluOdemeYap = async () => {
         Modal.confirm({
             title: 'Ödemeleri Onayla',
-            content: `"${paketIsmi}" paketindeki toplam ${toplamTalep.toLocaleString()} ₺ ödeme yapılacak. Onaylıyor musun?`,
+            content: `"${paketIsmi}" paketini onaylıyor musun?`,
             onOk: async () => {
                 try {
                     const list = veriler.map(v => ({ pId: v.pId, buHafta: v.duzenlenenTutar }));
                     await axiosInstance.post('/mesai/toplu-odeme', { list, paketIsmi });
-                    message.success("Ödemeler başarıyla kasadan düşüldü ve arşivlendi!");
+                    message.success("Ödemeler başarıyla arşivlendi!");
                     fetchAnaliz();
                     fetchArsiv();
                 } catch (e) { message.error("Ödeme kaydedilemedi."); }
@@ -91,7 +100,7 @@ const MaasYonetimi = () => {
         });
     };
 
-    const toplamTalep = veriler.reduce((acc, curr) => acc + (curr.duzenlenenTutar - curr.gecenHafta), 0);
+    const toplamTalep = veriler.reduce((acc, curr) => acc + curr.duzenlenenTutar, 0);
 
     return (
         <Card style={{ margin: 20 }}>
@@ -99,21 +108,20 @@ const MaasYonetimi = () => {
                 <TabPane tab="Bu Haftalık Hakediş" key="1">
                     <Card title="Yeni Ödeme Paketi Hazırla" extra={
                         <Space>
+                            <Button onClick={exportToExcel}>Excel İndir</Button>
                             <Input value={paketIsmi} onChange={e => setPaketIsmi(e.target.value)} style={{ width: 250 }} />
-                            <Button type="primary" onClick={topluOdemeYap} disabled={veriler.length === 0}>Bu Haftayı Öde ve Arşivle</Button>
+                            <Button type="primary" onClick={topluOdemeYap} disabled={veriler.length === 0}>Öde ve Arşivle</Button>
                         </Space>
                     }>
                         <Table dataSource={veriler} rowKey="pId" pagination={false} columns={[
                             { title: 'Personel', dataIndex: 'isim' },
-                            { title: 'Geçen Hafta', dataIndex: 'gecenHafta', render: v => `${v.toLocaleString()} ₺` },
                             {
-                                title: 'Bu Hafta (Düzenle)', dataIndex: 'duzenlenenTutar', render: (val, r) => (
+                                title: 'Bu Hafta Hakediş (Düzenle)', dataIndex: 'duzenlenenTutar', render: (val, r) => (
                                     <InputNumber value={val} onChange={(v) => setVeriler(prev => prev.map(i => i.pId === r.pId ? { ...i, duzenlenenTutar: v } : i))} />
                                 )
-                            },
-                            { title: 'Fark', render: r => <Tag color={r.duzenlenenTutar - r.gecenHafta >= 0 ? 'green' : 'red'}>{(r.duzenlenenTutar - r.gecenHafta).toLocaleString()} ₺</Tag> }
+                            }
                         ]} summary={() => (
-                            <Table.Summary.Row><Table.Summary.Cell colSpan={3} align="right"><Text strong>Toplam Fark:</Text></Table.Summary.Cell>
+                            <Table.Summary.Row><Table.Summary.Cell align="right"><Text strong>TOPLAM:</Text></Table.Summary.Cell>
                                 <Table.Summary.Cell><Text strong type="success">{toplamTalep.toLocaleString()} ₺</Text></Table.Summary.Cell></Table.Summary.Row>
                         )} />
                     </Card>
@@ -135,14 +143,7 @@ const MaasYonetimi = () => {
                 </TabPane>
             </Tabs>
 
-            {/* Modal'da 'open' kullanıldı */}
-            <Modal
-                title="Ödeme Detayları"
-                open={isModalVisible}
-                onCancel={() => setIsModalVisible(false)}
-                footer={null}
-                width={600}
-            >
+            <Modal title="Ödeme Detayları" open={isModalVisible} onCancel={() => setIsModalVisible(false)} footer={null} width={600}>
                 {modalLoading ? <Spin /> : (
                     <Table dataSource={seciliPaketDetaylari} rowKey="_id" columns={[
                         { title: 'Personel', dataIndex: ['personelId', 'adSoyad'] },
