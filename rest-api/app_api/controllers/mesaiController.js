@@ -5,13 +5,13 @@ const dayjs = require('dayjs');
 
 const Personel = mongoose.model('Personel');
 const PersonelHareket = mongoose.model('PersonelHareket');
-const Odeme = mongoose.model('Odeme');
+// Odeme modeli varsa yüklüyoruz, yoksa hata vermemesi için kontrol ediyoruz
+const Odeme = mongoose.models.Odeme || null;
 
 // 1. TOPLU TAHAKKUK (EXCEL İLE)
 const mesaiYukle = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ description: "Dosya yüklenemedi!" });
-
         const workbook = xlsx.readFile(req.file.path);
         const sheetName = workbook.SheetNames[0];
         const hamVeri = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
@@ -28,7 +28,6 @@ const mesaiYukle = async (req, res) => {
         });
 
         const sonuclar = { basariliTahakkuklar: [], sistemdeBulunamayanlar: [] };
-
         for (const [isim, tarihlerSet] of Object.entries(calismaGunleri)) {
             const calisilanGunSayisi = tarihlerSet.size;
             const regex = new RegExp(`^${isim}$`, 'i');
@@ -37,17 +36,14 @@ const mesaiYukle = async (req, res) => {
             if (personel) {
                 const yevmiye = personel.ucretMiktari || 0;
                 const toplamHakedis = calisilanGunSayisi * yevmiye;
-
                 personel.bakiye += toplamHakedis;
                 await personel.save();
-
                 await PersonelHareket.create({
                     personelId: personel._id,
                     islemTipi: 'Hakediş',
                     tutar: toplamHakedis,
                     aciklama: `Otomatik Puantaj: ${calisilanGunSayisi} Gün`
                 });
-
                 sonuclar.basariliTahakkuklar.push({ isim: personel.adSoyad, tahakkukTutar: toplamHakedis });
             } else {
                 sonuclar.sistemdeBulunamayanlar.push({ isim: isim, gun: calisilanGunSayisi });
@@ -65,14 +61,12 @@ const mesaiYukle = async (req, res) => {
 const hakedisHesapla = async (req, res) => {
     try {
         const id = req.params.employeeId;
-        const { calculation_date, period_type, calisilanGunManuel } = req.body;
-
+        const { period_type, calisilanGunManuel } = req.body;
         const personel = await Personel.findById(id);
         if (!personel) return res.status(404).json({ description: "Personel Bulunamadı" });
 
         let calisilanGun = calisilanGunManuel ? Number(calisilanGunManuel) : (period_type === "Aylık" ? 26 : (period_type === "Haftalık" ? 6 : 1));
         const toplamHakedis = calisilanGun * (personel.ucretMiktari || 0);
-
         personel.bakiye += toplamHakedis;
         await personel.save();
 
@@ -82,7 +76,6 @@ const hakedisHesapla = async (req, res) => {
             tutar: toplamHakedis,
             aciklama: `Manuel Tahakkuk: ${calisilanGun} Gün`
         });
-
         res.status(200).json({ mesaj: "Tahakkuk eklendi.", yeni_bakiye: personel.bakiye });
     } catch (hata) {
         res.status(400).json({ description: "Hata", detay: hata.message });
@@ -94,50 +87,27 @@ const haftalikAnalizGetir = async (req, res) => {
     try {
         const tarihSiniri = new Date();
         tarihSiniri.setDate(tarihSiniri.getDate() - 14);
-
-        const hareketler = await PersonelHareket.find({
-            islemTipi: 'Hakediş',
-            islemTarihi: { $gte: tarihSiniri }
-        }).populate('personelId', 'adSoyad aktifMi');
-
+        const hareketler = await PersonelHareket.find({ islemTipi: 'Hakediş', islemTarihi: { $gte: tarihSiniri } }).populate('personelId', 'adSoyad aktifMi');
         const gecerliHareketler = hareketler.filter(h => h.personelId && h.personelId.aktifMi === true);
         res.status(200).json(gecerliHareketler);
     } catch (hata) {
-        console.error("ANALİZ HATASI:", hata);
         res.status(500).json({ mesaj: "Analiz verisi alınamadı", detay: hata.message });
     }
 };
 
-// 4. TOPLU ÖDEME
+// 4. TOPLU ÖDEME (ÇİFT ÖDEME KORUMALI)
 const topluOdemeYap = async (req, res) => {
     try {
         const { list, paketIsmi } = req.body;
-        const baslik = paketIsmi || `${dayjs().format('DD.MM.YYYY')} Haftalık Maaş`;
+        const varmi = await PersonelHareket.findOne({ islemTipi: 'Ödeme', aciklama: paketIsmi });
+        if (varmi) return res.status(400).json({ mesaj: "Bu haftayı zaten ödediniz!" });
 
         for (const item of list) {
             if (!item.pId || item.buHafta <= 0) continue;
-
-            await PersonelHareket.create({
-                personelId: item.pId,
-                islemTipi: 'Ödeme',
-                tutar: -item.buHafta,
-                aciklama: baslik
-            });
-
+            await PersonelHareket.create({ personelId: item.pId, islemTipi: 'Ödeme', tutar: -item.buHafta, aciklama: paketIsmi });
             await Personel.findByIdAndUpdate(item.pId, { $inc: { bakiye: -item.buHafta } });
-
-            // KASA GÜNCELLEME - HATA YAKALAYICI İLE
-            try {
-                if (typeof Odeme !== 'undefined') {
-                    await Odeme.create({
-                        tutar: item.buHafta,
-                        aciklama: `${baslik} - Personel Ödemesi`,
-                        tip: 'Gider',
-                        tarih: new Date()
-                    });
-                }
-            } catch (err) {
-                console.error("Kasa kaydı atlandı, model hatası:", err.message);
+            if (Odeme) {
+                await Odeme.create({ tutar: item.buHafta, aciklama: `${paketIsmi} - Personel Ödemesi`, tip: 'Gider', tarih: new Date() }).catch(() => { });
             }
         }
         res.status(200).json({ mesaj: "Ödemeler başarıyla sisteme işlendi." });
@@ -146,19 +116,23 @@ const topluOdemeYap = async (req, res) => {
     }
 };
 
+// 5. ARŞİV GÜNCELLEME
+const arsivGuncelle = async (req, res) => {
+    try {
+        const { eskiPaketAdi, yeniListe, yeniPaketAdi } = req.body;
+        await PersonelHareket.deleteMany({ islemTipi: 'Ödeme', aciklama: eskiPaketAdi });
+        for (const item of yeniListe) {
+            await PersonelHareket.create({ personelId: item.pId, islemTipi: 'Ödeme', tutar: -item.buHafta, aciklama: yeniPaketAdi });
+        }
+        res.status(200).json({ mesaj: "Arşiv güncellendi." });
+    } catch (e) { res.status(500).json({ mesaj: "Güncelleme başarısız." }); }
+};
+
 const gecmisOdemeleriGetir = async (req, res) => {
     try {
-        // 'Ödeme' tipiyle kaydedilmiş tüm hareketleri paket ismine göre grupla
         const paketler = await PersonelHareket.aggregate([
             { $match: { islemTipi: 'Ödeme' } },
-            {
-                $group: {
-                    _id: "$aciklama",
-                    toplam: { $sum: { $abs: "$tutar" } },
-                    tarih: { $first: "$islemTarihi" },
-                    detaylar: { $push: "$$ROOT" }
-                }
-            },
+            { $group: { _id: "$aciklama", toplam: { $sum: { $abs: "$tutar" } }, tarih: { $first: "$islemTarihi" } } },
             { $sort: { tarih: -1 } }
         ]);
         res.status(200).json(paketler);
@@ -167,21 +141,16 @@ const gecmisOdemeleriGetir = async (req, res) => {
 
 const arsivSil = async (req, res) => {
     try {
-        const { paketAdi } = req.params;
-        // O pakete ait tüm 'Ödeme' kayıtlarını sil
-        await PersonelHareket.deleteMany({ islemTipi: 'Ödeme', aciklama: paketAdi });
+        await PersonelHareket.deleteMany({ islemTipi: 'Ödeme', aciklama: req.params.paketAdi });
         res.status(200).json({ mesaj: "Arşiv silindi." });
     } catch (e) { res.status(500).json({ mesaj: "Silme başarısız." }); }
 };
 
-// 6. PAKET DETAYLARINI GÖRME
 const paketDetayGetir = async (req, res) => {
     try {
-        const { paketAdi } = req.params;
-        const detaylar = await PersonelHareket.find({ islemTipi: 'Ödeme', aciklama: paketAdi })
-            .populate('personelId', 'adSoyad');
+        const detaylar = await PersonelHareket.find({ islemTipi: 'Ödeme', aciklama: req.params.paketAdi }).populate('personelId', 'adSoyad');
         res.status(200).json(detaylar);
     } catch (e) { res.status(500).json({ mesaj: "Detaylar alınamadı." }); }
 };
 
-module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir, topluOdemeYap, gecmisOdemeleriGetir, arsivSil, paketDetayGetir };
+module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir, topluOdemeYap, gecmisOdemeleriGetir, arsivSil, paketDetayGetir, arsivGuncelle };

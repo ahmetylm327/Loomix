@@ -47,6 +47,7 @@ router.post('/mesai/toplu-odeme', ctrlMesai.topluOdemeYap);
 router.get('/mesai/gecmis-odemeler', ctrlMesai.gecmisOdemeleriGetir);
 router.delete('/mesai/arsiv/:paketAdi', ctrlMesai.arsivSil);
 router.get('/mesai/arsiv/:paketAdi', ctrlMesai.paketDetayGetir);
+router.put('/mesai/arsiv', ctrlMesai.arsivGuncelle);
 // ---------------------------------------------------------
 // ⚙️ ÜRETİM ROTALARI
 // ---------------------------------------------------------
