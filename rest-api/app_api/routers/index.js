@@ -97,5 +97,6 @@ router.post('/estimates/ai-forecast', ctrlTahmin.tahminYap);
 router.post('/kayit', ctrlAuth.kayitOl);
 router.post('/auth/login', ctrlAuth.girisYap);
 router.get('/denetim/rapor', ctrlDenetim.denetimYap);
+router.get('/denetim/onar', ctrlDenetim.hatalariOnar);
 
 module.exports = router;
