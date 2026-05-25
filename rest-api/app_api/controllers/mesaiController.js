@@ -5,8 +5,7 @@ const dayjs = require('dayjs');
 
 const Personel = mongoose.model('Personel');
 const PersonelHareket = mongoose.model('PersonelHareket');
-// Odeme modeli varsa yüklüyoruz, yoksa hata vermemesi için kontrol ediyoruz
-const Odeme = mongoose.models.Odeme || null;
+const Odeme = mongoose.model('Odeme');
 
 // 1. TOPLU TAHAKKUK (EXCEL İLE)
 const mesaiYukle = async (req, res) => {
@@ -57,7 +56,7 @@ const mesaiYukle = async (req, res) => {
     }
 };
 
-// 2. TEKLİ / MANUEL TAHAKKUK
+// 2. MANUEL TAHAKKUK
 const hakedisHesapla = async (req, res) => {
     try {
         const id = req.params.employeeId;
@@ -95,7 +94,7 @@ const haftalikAnalizGetir = async (req, res) => {
     }
 };
 
-// 4. TOPLU ÖDEME (ÇİFT ÖDEME KORUMALI)
+// 4. TOPLU ÖDEME (KASA ENTEGRE + ÇİFT ÖDEME KORUMALI)
 const topluOdemeYap = async (req, res) => {
     try {
         const { list, paketIsmi } = req.body;
@@ -104,30 +103,34 @@ const topluOdemeYap = async (req, res) => {
 
         for (const item of list) {
             if (!item.pId || item.buHafta <= 0) continue;
-            await PersonelHareket.create({ personelId: item.pId, islemTipi: 'Ödeme', tutar: -item.buHafta, aciklama: paketIsmi });
+
+            await PersonelHareket.create({
+                personelId: item.pId,
+                islemTipi: 'Ödeme',
+                tutar: -item.buHafta,
+                aciklama: paketIsmi
+            });
+
             await Personel.findByIdAndUpdate(item.pId, { $inc: { bakiye: -item.buHafta } });
-            if (Odeme) {
-                await Odeme.create({ tutar: item.buHafta, aciklama: `${paketIsmi} - Personel Ödemesi`, tip: 'Gider', tarih: new Date() }).catch(() => { });
-            }
+
+            // Kasa kaydını zorunlu alanlarıyla oluşturuyoruz
+            await Odeme.create({
+                islemYonu: 'Gider',
+                odemeTipi: 'Nakit/Banka',
+                tutar: item.buHafta,
+                kategori: 'Personel Maaşları',
+                ilgiliId: item.pId,
+                odemeTarihi: new Date(),
+                notlar: `${paketIsmi} - Personel Ödemesi`
+            });
         }
         res.status(200).json({ mesaj: "Ödemeler başarıyla sisteme işlendi." });
     } catch (hata) {
-        res.status(500).json({ mesaj: "Hata oluştu", detay: hata.message });
+        res.status(500).json({ mesaj: "Ödeme işlemi başarısız", detay: hata.message });
     }
 };
 
-// 5. ARŞİV GÜNCELLEME
-const arsivGuncelle = async (req, res) => {
-    try {
-        const { eskiPaketAdi, yeniListe, yeniPaketAdi } = req.body;
-        await PersonelHareket.deleteMany({ islemTipi: 'Ödeme', aciklama: eskiPaketAdi });
-        for (const item of yeniListe) {
-            await PersonelHareket.create({ personelId: item.pId, islemTipi: 'Ödeme', tutar: -item.buHafta, aciklama: yeniPaketAdi });
-        }
-        res.status(200).json({ mesaj: "Arşiv güncellendi." });
-    } catch (e) { res.status(500).json({ mesaj: "Güncelleme başarısız." }); }
-};
-
+// 5. ARŞİV İŞLEMLERİ
 const gecmisOdemeleriGetir = async (req, res) => {
     try {
         const paketler = await PersonelHareket.aggregate([
@@ -151,6 +154,17 @@ const paketDetayGetir = async (req, res) => {
         const detaylar = await PersonelHareket.find({ islemTipi: 'Ödeme', aciklama: req.params.paketAdi }).populate('personelId', 'adSoyad');
         res.status(200).json(detaylar);
     } catch (e) { res.status(500).json({ mesaj: "Detaylar alınamadı." }); }
+};
+
+const arsivGuncelle = async (req, res) => {
+    try {
+        const { eskiPaketAdi, yeniListe, yeniPaketAdi } = req.body;
+        await PersonelHareket.deleteMany({ islemTipi: 'Ödeme', aciklama: eskiPaketAdi });
+        for (const item of yeniListe) {
+            await PersonelHareket.create({ personelId: item.pId, islemTipi: 'Ödeme', tutar: -item.buHafta, aciklama: yeniPaketAdi });
+        }
+        res.status(200).json({ mesaj: "Arşiv güncellendi." });
+    } catch (e) { res.status(500).json({ mesaj: "Güncelleme başarısız." }); }
 };
 
 module.exports = { mesaiYukle, hakedisHesapla, haftalikAnalizGetir, topluOdemeYap, gecmisOdemeleriGetir, arsivSil, paketDetayGetir, arsivGuncelle };
