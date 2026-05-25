@@ -98,17 +98,15 @@ const haftalikAnalizGetir = async (req, res) => {
 const topluOdemeYap = async (req, res) => {
     try {
         const { list, paketIsmi } = req.body;
-        const varmi = await PersonelHareket.findOne({ islemTipi: 'Ödeme', aciklama: paketIsmi });
-        if (varmi) return res.status(400).json({ mesaj: "Bu haftayı zaten ödediniz!" });
 
         for (const item of list) {
             if (!item.pId || item.duzenlenenTutar <= 0) continue;
 
+            // 1. Önce personelin güncel durumunu veritabanından çek
             const personel = await Personel.findById(item.pId);
-
-            // 1. MANUEL DÜZENLEME FARKINI HESAPLA VE İŞLE
-            // (Senin manuel girdiğin tutar ile sistemin hesapladığı orijinal tutar farkı)
             const fark = item.duzenlenenTutar - item.buHafta;
+
+            // 2. PersonelHareket kayıtlarını at (Bakiye kısmını kodla değil, MongoDB ile yönet)
             if (Math.abs(fark) > 0.01) {
                 await PersonelHareket.create({
                     personelId: item.pId,
@@ -116,10 +114,8 @@ const topluOdemeYap = async (req, res) => {
                     tutar: fark,
                     aciklama: `Manuel Düzenleme: ${paketIsmi}`
                 });
-                personel.bakiye += fark;
             }
 
-            // 2. ÖDEME İŞLEMİNİ KAYDET
             await PersonelHareket.create({
                 personelId: item.pId,
                 islemTipi: 'Ödeme',
@@ -127,26 +123,26 @@ const topluOdemeYap = async (req, res) => {
                 aciklama: paketIsmi
             });
 
-            // 3. BAKİYEYİ GÜNCELLE
-            personel.bakiye -= item.duzenlenenTutar;
-            await personel.save();
+            // 3. EN ÖNEMLİ KISIM: Bakiyeyi manuel set etme, 'inc' ile farkı ekle
+            // Bu sayede bakiye her zaman güncel kalır, üzerine yanlış değer yazılmaz.
+            await Personel.findByIdAndUpdate(item.pId, {
+                $inc: { bakiye: (fark - item.duzenlenenTutar) }
+            });
 
-            // 4. KASA KAYDI
-            if (Odeme) {
-                await Odeme.create({
-                    islemYonu: 'Gider',
-                    odemeTipi: 'Nakit/Banka',
-                    tutar: item.duzenlenenTutar,
-                    kategori: 'Personel Maaşları',
-                    ilgiliId: item.pId,
-                    odemeTarihi: new Date(),
-                    notlar: `${paketIsmi} - Personel Ödemesi`
-                }).catch(() => { });
-            }
+            // 4. Kasa kaydı
+            await Odeme.create({
+                islemYonu: 'Gider',
+                odemeTipi: 'Nakit/Banka',
+                tutar: item.duzenlenenTutar,
+                kategori: 'Personel Maaşları',
+                ilgiliId: item.pId,
+                odemeTarihi: new Date(),
+                notlar: `${paketIsmi} - Personel Ödemesi`
+            });
         }
-        res.status(200).json({ mesaj: "Ödemeler ve düzenlemeler başarıyla işlendi." });
+        res.status(200).json({ mesaj: "Bakiye ve ödemeler atomik olarak güncellendi." });
     } catch (hata) {
-        res.status(500).json({ mesaj: "Hata:", detay: hata.message });
+        res.status(500).json({ detay: hata.message });
     }
 };
 
