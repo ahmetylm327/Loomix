@@ -8,11 +8,10 @@ exports.kayitOl = async (req, res) => {
     try {
         const { kullaniciAdi, sifre, rol } = req.body;
 
-        // Kullanıcı adı kontrolü
         const varMi = await Kullanici.findOne({ kullaniciAdi });
         if (varMi) return res.status(400).json({ mesaj: "Bu kullanıcı adı zaten mevcut." });
 
-        // 🛡️ ŞİFRE HASHLEME: DB'de şifreler okunamaz olsun
+        // Şifre hashleme
         const salt = await bcrypt.genSalt(10);
         const hashliSifre = await bcrypt.hash(sifre, salt);
 
@@ -22,9 +21,9 @@ exports.kayitOl = async (req, res) => {
             rol: rol || 'admin'
         });
 
-        res.status(201).json({ mesaj: "Kayıt Başarılı!", id: yeniKullanici._id });
+        res.status(201).json({ mesaj: "Kayıt Başarılı!" });
     } catch (hata) {
-        res.status(400).json({ mesaj: "Kayıt hatası: " + hata.message });
+        res.status(500).json({ mesaj: "Kayıt sırasında hata oluştu." });
     }
 };
 
@@ -33,25 +32,40 @@ exports.girisYap = async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // 👑 PATRON KİLİDİ: Veritabanına bakmadan direkt kapıyı açar
-        if (username === 'ahmet' && password === 'patron123') {
-            const token = jwt.sign({ id: 'patron', username: 'ahmet' }, process.env.JWT_SECRET || 'LOOMIX_SECRET', { expiresIn: '24h' });
-            return res.status(200).json({ token, mesaj: "Hoş geldin patron!" });
-        }
-
-        // Normal Kullanıcı Sorgusu
+        // 1. Kullanıcıyı bul
         const kullanici = await Kullanici.findOne({ kullaniciAdi: username });
-        if (!kullanici) return res.status(401).json({ mesaj: "Kullanıcı bulunamadı!" });
+        if (!kullanici) return res.status(401).json({ mesaj: "Hatalı kullanıcı adı veya şifre!" });
 
-        // Şifre Karşılaştırma
+        // 2. Şifre Karşılaştırma
         const sifreDogruMu = await bcrypt.compare(password, kullanici.sifre);
-        if (!sifreDogruMu) return res.status(401).json({ mesaj: "Hatalı şifre!" });
+        if (!sifreDogruMu) return res.status(401).json({ mesaj: "Hatalı kullanıcı adı veya şifre!" });
 
-        // JWT Token Üretimi
-        const token = jwt.sign({ id: kullanici._id }, process.env.JWT_SECRET || 'LOOMIX_SECRET', { expiresIn: '24h' });
-        res.status(200).json({ token });
+        // 3. JWT Token Üretimi (Anahtar yoksa uygulama hata vermeli, gizli anahtar şart!)
+        if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET tanımlı değil!");
+
+        const token = jwt.sign(
+            { id: kullanici._id, rol: kullanici.rol },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        // 4. Token'ı Cookie'ye bas (XSS saldırılarını engeller)
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // Canlıda sadece HTTPS ile çalışır
+            sameSite: 'strict',
+            maxAge: 24 * 60 * 60 * 1000 // 24 saat
+        });
+
+        res.status(200).json({ mesaj: "Giriş başarılı", rol: kullanici.rol });
 
     } catch (hata) {
         res.status(500).json({ mesaj: "Sunucu hatası!" });
     }
+};
+
+// --- 3. ÇIKIŞ YAP (LOGOUT) ---
+exports.cikisYap = async (req, res) => {
+    res.clearCookie('token');
+    res.status(200).json({ mesaj: "Çıkış başarılı." });
 };
