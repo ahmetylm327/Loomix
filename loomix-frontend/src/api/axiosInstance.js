@@ -5,7 +5,8 @@ const axiosInstance = axios.create({
     baseURL: 'https://loomix-backend.onrender.com/api',
     headers: {
         'Content-Type': 'application/json'
-    }
+    },
+    withCredentials: true // <--- GÜVENLİK İÇİN BU SATIRI EKLEDİK
 });
 
 export default axiosInstance;

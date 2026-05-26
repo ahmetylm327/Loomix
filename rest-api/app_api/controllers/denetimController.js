@@ -69,4 +69,4 @@ const hatalariOnar = async (req, res) => {
     }
 };
 
-module.exports = { denetimYap, hatalariOnar };
+module.exports = { denetimYap, hatalariOnarF };
