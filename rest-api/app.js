@@ -8,11 +8,7 @@ const cookieParser = require('cookie-parser');
 app.use(cookieParser()); // Bu satır, gelen cookie'yi okumamızı sağlar
 // 🛡️ Gelişmiş CORS Ayarı
 app.use(cors({
-    origin: function (origin, callback) {
-        // Gelen her isteğe izin ver (Geliştirme aşaması için en rahatı)
-        // İleride sadece belirli linkleri içeren bir dizi/array de koyabilirsin
-        callback(null, true);
-    },
+    origin: true,
     credentials: true
 }));
 
