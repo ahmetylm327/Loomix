@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Card, Col, Row, Statistic, Typography, Spin, Table, Tag, Space, Divider } from 'antd';
 import {
     UserOutlined, ShopOutlined, WalletOutlined,
-    LineChartOutlined, PieChartOutlined, HistoryOutlined, FallOutlined, RiseOutlined
+    LineChartOutlined, PieChartOutlined, HistoryOutlined,
+    FallOutlined, RiseOutlined, FileTextOutlined, GlobalOutlined
 } from '@ant-design/icons';
 import { Line, Pie } from '@ant-design/charts';
 import axiosInstance from '../api/axiosInstance';
@@ -14,7 +15,7 @@ const Dashboard = () => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const formatPara = (val) => val?.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00";
+    const formatPara = (val) => Number(val)?.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00";
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -30,30 +31,63 @@ const Dashboard = () => {
         fetchStats();
     }, []);
 
-    if (loading) return <div style={{ textAlign: 'center', marginTop: 100 }}><Spin size="large" description="Yönetim Paneli Hazırlanıyor..." /></div>;
+    if (loading) return (
+        <div style={{ textAlign: 'center', marginTop: 100 }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 12, color: '#888' }}>Yönetim Paneli Hazırlanıyor...</div>
+        </div>
+    );
 
-    // --- GRAFİK AYARLARI ---
+    const maasData = stats?.maasAnalizi || [];
     const maasConfig = {
-        data: stats?.maasAnalizi || [],
+        data: maasData.length > 0 ? maasData : [{ hafta: 'Veri Yok', tutar: 0 }],
         xField: 'hafta',
         yField: 'tutar',
         point: { size: 5 },
-        color: '#cf1322', // Gider olduğu için kırmızı tonu
+        color: '#cf1322',
         smooth: true,
+        yAxis: { label: { formatter: (v) => `${Number(v).toLocaleString('tr-TR')} ₺` } },
     };
 
+    const pieData = stats?.kategoriDagilimi || [];
     const pieConfig = {
-        data: stats?.kategoriDagilimi || [],
+        data: pieData.length > 0 ? pieData : [{ type: 'Veri Yok', value: 1 }],
         angleField: 'value',
         colorField: 'type',
         radius: 0.8,
-        label: { text: (datum) => `${datum.type}: ${datum.value}`, style: { fontSize: 13, fontWeight: 'bold' } },
+        label: {
+            text: (datum) => `${datum.type}: ${datum.value}`,
+            style: { fontSize: 12, fontWeight: 'bold' }
+        },
     };
 
     const islemSutunlar = [
-        { title: 'Tarih', dataIndex: 'odemeTarihi', width: 100, render: t => dayjs(t).format('DD.MM.YYYY') },
-        { title: 'İşlem Türü', dataIndex: 'islemYonu', width: 120, render: y => <Tag color={y === 'Gelir' ? 'success' : 'error'} icon={y === 'Gelir' ? <RiseOutlined /> : <FallOutlined />}>{y === 'Gelir' ? 'Tahsilat' : 'Ödeme'}</Tag> },
-        { title: 'Açıklama', dataIndex: 'notlar', render: n => <Text type="secondary">{n || 'Kasa İşlemi'}</Text> },
+        {
+            title: 'Tarih',
+            dataIndex: 'odemeTarihi',
+            width: 100,
+            render: t => dayjs(t).format('DD.MM.YYYY')
+        },
+        {
+            title: 'İşlem',
+            dataIndex: 'islemYonu',
+            width: 120,
+            render: y => (
+                <Tag color={y === 'Gelir' ? 'success' : 'error'} icon={y === 'Gelir' ? <RiseOutlined /> : <FallOutlined />}>
+                    {y === 'Gelir' ? 'Tahsilat' : 'Ödeme'}
+                </Tag>
+            )
+        },
+        {
+            title: 'Kategori',
+            dataIndex: 'kategori',
+            render: k => <Text type="secondary">{k || 'Genel'}</Text>
+        },
+        {
+            title: 'Açıklama',
+            dataIndex: 'notlar',
+            render: n => <Text type="secondary">{n || '-'}</Text>
+        },
         {
             title: 'Tutar',
             dataIndex: 'tutar',
@@ -66,6 +100,8 @@ const Dashboard = () => {
         }
     ];
 
+    const netVarlik = (stats?.netKasa || 0) + (stats?.toplamAlacak || 0);
+
     return (
         <div style={{ padding: '20px', background: '#f0f2f5', minHeight: '100vh' }}>
             <div style={{ marginBottom: 25 }}>
@@ -73,7 +109,7 @@ const Dashboard = () => {
                 <Text type="secondary">Atölyenizin güncel finansal ve operasyonel durumu.</Text>
             </div>
 
-            {/* ÜST İSTATİSTİK KARTLARI */}
+            {/* SATIR 1 — SAYAÇLAR */}
             <Row gutter={[16, 16]}>
                 <Col xs={24} sm={12} lg={6}>
                     <Card bordered={false} style={{ borderLeft: '5px solid #1890ff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
@@ -103,31 +139,84 @@ const Dashboard = () => {
                 </Col>
             </Row>
 
+            {/* SATIR 2 — FİNANSAL ÖZET KARTLARI */}
+            <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+                <Col xs={24} sm={12} lg={8}>
+                    <Card bordered={false} style={{ borderLeft: '5px solid #722ed1', background: '#f9f0ff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <Statistic
+                            title={<span style={{ fontWeight: 'bold' }}>Piyasadaki Alacak</span>}
+                            value={formatPara(stats?.toplamAlacak || 0)}
+                            suffix="₺"
+                            prefix={<FileTextOutlined style={{ color: '#722ed1' }} />}
+                            valueStyle={{ color: '#722ed1', fontWeight: 'bold' }}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={24} sm={12} lg={8}>
+                    <Card bordered={false} style={{ borderLeft: '5px solid #13c2c2', background: '#e6fffb', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <Statistic
+                            title={<span style={{ fontWeight: 'bold' }}>Bu Ay Kesilen Fiş</span>}
+                            value={formatPara(stats?.buAyFisTutari || 0)}
+                            suffix="₺"
+                            prefix={<FileTextOutlined style={{ color: '#13c2c2' }} />}
+                            valueStyle={{ color: '#13c2c2', fontWeight: 'bold' }}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={24} sm={24} lg={8}>
+                    <Card bordered={false} style={{ borderLeft: '5px solid #52c41a', background: '#f6ffed', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <Statistic
+                            title={<span style={{ fontWeight: 'bold' }}>Şirket Net Varlığı</span>}
+                            value={formatPara(netVarlik)}
+                            suffix="₺"
+                            prefix={<GlobalOutlined style={{ color: '#52c41a' }} />}
+                            valueStyle={{ color: '#52c41a', fontWeight: 'bold', fontSize: '22px' }}
+                        />
+                    </Card>
+                </Col>
+            </Row>
+
             <Divider />
 
             {/* GRAFİKLER */}
             <Row gutter={[16, 16]}>
                 <Col xs={24} lg={16}>
-                    <Card title={<Space><LineChartOutlined /> Haftalık Personel Maaş Giderleri</Space>} bordered={false} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                        <div style={{ height: 300 }}><Line {...maasConfig} /></div>
+                    <Card
+                        title={<Space><LineChartOutlined /> Haftalık Personel Maaş Giderleri</Space>}
+                        bordered={false}
+                        style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                    >
+                        {maasData.length === 0
+                            ? <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb' }}>Henüz maaş verisi yok</div>
+                            : <div style={{ height: 300 }}><Line {...maasConfig} /></div>
+                        }
                     </Card>
                 </Col>
                 <Col xs={24} lg={8}>
-                    <Card title={<Space><PieChartOutlined /> Ürün Dağılımı</Space>} bordered={false} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card
+                        title={<Space><PieChartOutlined /> Ürün Dağılımı</Space>}
+                        bordered={false}
+                        style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                    >
                         <div style={{ height: 300 }}><Pie {...pieConfig} /></div>
                     </Card>
                 </Col>
             </Row>
 
-            {/* FİNANSAL İŞLEMLER TABLOSU */}
+            {/* SON İŞLEMLER */}
             <Row style={{ marginTop: 20 }}>
                 <Col span={24}>
-                    <Card title={<Space><HistoryOutlined /> Son Finansal İşlemler</Space>} bordered={false} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card
+                        title={<Space><HistoryOutlined /> Son Finansal İşlemler</Space>}
+                        bordered={false}
+                        style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                    >
                         <Table
                             dataSource={stats?.sonIslemler || []}
                             columns={islemSutunlar}
                             rowKey={(r) => r._id || Math.random()}
-                            pagination={{ pageSize: 5 }}
+                            pagination={false}
+                            locale={{ emptyText: 'Henüz kasa işlemi yok' }}
                         />
                     </Card>
                 </Col>
