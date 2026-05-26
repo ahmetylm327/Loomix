@@ -2,10 +2,10 @@ const express = require('express');
 const cors = require('cors');
 require('./app_api/models/db');
 const apiRouter = require('./app_api/routers/index');
+
+const app = express();
 const cookieParser = require('cookie-parser');
 app.use(cookieParser()); // Bu satır, gelen cookie'yi okumamızı sağlar
-const app = express();
-
 // 🛡️ Gelişmiş CORS Ayarı
 app.use(cors({
     origin: function (origin, callback) {
