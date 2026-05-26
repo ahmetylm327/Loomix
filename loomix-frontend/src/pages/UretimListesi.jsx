@@ -23,6 +23,10 @@ const UretimListesi = () => {
     const [dateRange, setDateRange] = useState(null);
     const [selectedFirma, setSelectedFirma] = useState(null);
 
+    // 🚀 YENİ: Stok kodu arama state'leri
+    const [stokArama, setStokArama] = useState('');
+    const [bulunanUrun, setBulunanUrun] = useState(null);
+
     useEffect(() => {
         verileriGetir();
     }, []);
@@ -45,9 +49,31 @@ const UretimListesi = () => {
         }
     };
 
+    // 🚀 YENİ: Stok kodu arama fonksiyonu
+    const handleStokKoduAra = (value) => {
+        setStokArama(value);
+        if (!value || value.length < 2) {
+            setBulunanUrun(null);
+            return;
+        }
+        const bulunan = urunler.find(u => u.stokKodu?.toLowerCase() === value.toLowerCase());
+        if (bulunan) {
+            setBulunanUrun(bulunan);
+            form.setFieldsValue({ productId: bulunan._id, birimFiyat: bulunan.birimFiyat });
+            message.success(`"${bulunan.urunAdi}" bulundu, fiyat otomatik girildi.`);
+        } else {
+            setBulunanUrun(null);
+        }
+    };
+
     const handleUrunDegisimi = (urunId) => {
         const secilenUrun = urunler.find(u => u._id === urunId);
-        if (secilenUrun) form.setFieldsValue({ birimFiyat: secilenUrun.birimFiyat });
+        if (secilenUrun) {
+            form.setFieldsValue({ birimFiyat: secilenUrun.birimFiyat });
+            // 🚀 YENİ: Ürün seçince stok kodunu da doldur
+            setStokArama(secilenUrun.stokKodu || '');
+            setBulunanUrun(secilenUrun);
+        }
     };
 
     const handleUretimEkle = async (values) => {
@@ -60,6 +86,9 @@ const UretimListesi = () => {
             message.success("Fiş başarıyla kesildi ve firma bakiyesine yansıdı!");
             setIsModalVisible(false);
             form.resetFields();
+            // 🚀 YENİ: Modal kapanınca stok arama sıfırla
+            setStokArama('');
+            setBulunanUrun(null);
             verileriGetir();
         } catch (error) {
             message.error("Üretim eklenirken hata oluştu!");
@@ -68,7 +97,6 @@ const UretimListesi = () => {
 
     const handleSil = async (id) => {
         try {
-            // 🚀 Burası backend'deki bakiye düşüren fonksiyonu tetikler
             await axiosInstance.delete(`/production/${id}`);
             message.success("Fiş silindi ve firma bakiyesi güncellendi.");
             verileriGetir();
@@ -144,7 +172,7 @@ const UretimListesi = () => {
                 />
             </Card>
 
-            <Modal title="Yeni Üretim Fişi" open={isModalVisible} onOk={() => form.submit()} onCancel={() => setIsModalVisible(false)} width={700}>
+            <Modal title="Yeni Üretim Fişi" open={isModalVisible} onOk={() => form.submit()} onCancel={() => { setIsModalVisible(false); setStokArama(''); setBulunanUrun(null); }} width={700}>
                 <Form form={form} layout="vertical" onFinish={handleUretimEkle} initialValues={{ productionDate: dayjs() }}>
                     <Row gutter={16}>
                         <Col span={24}>
@@ -154,6 +182,24 @@ const UretimListesi = () => {
                                 </Select>
                             </Form.Item>
                         </Col>
+
+                        {/* 🚀 YENİ: Stok Kodu arama alanı */}
+                        <Col span={6}>
+                            <Form.Item label="Stok Kodu">
+                                <Input
+                                    placeholder="SKT-001"
+                                    value={stokArama}
+                                    onChange={(e) => handleStokKoduAra(e.target.value)}
+                                    style={{ fontFamily: 'monospace', fontWeight: 'bold', borderColor: bulunanUrun ? '#52c41a' : undefined }}
+                                    suffix={
+                                        bulunanUrun ? <span style={{ color: '#52c41a', fontSize: '11px' }}>✓</span>
+                                            : stokArama.length >= 2 ? <span style={{ color: '#ff4d4f', fontSize: '11px' }}>?</span>
+                                                : null
+                                    }
+                                />
+                            </Form.Item>
+                        </Col>
+
                         <Col span={10}>
                             <Form.Item name="productId" label="Ürün" rules={[{ required: true }]}>
                                 <Select onChange={handleUrunDegisimi}>
@@ -161,8 +207,8 @@ const UretimListesi = () => {
                                 </Select>
                             </Form.Item>
                         </Col>
-                        <Col span={7}><Form.Item name="birimFiyat" label="Fiyat" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
-                        <Col span={7}><Form.Item name="quantity" label="Adet" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={4}><Form.Item name="birimFiyat" label="Fiyat" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col span={4}><Form.Item name="quantity" label="Adet" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
                     </Row>
                     <Form.Item name="productionDate" label="Tarih"><DatePicker style={{ width: '100%' }} /></Form.Item>
                     <Form.Item name="notes" label="Not"><TextArea /></Form.Item>
