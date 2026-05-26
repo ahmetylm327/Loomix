@@ -59,11 +59,11 @@ const UretimListesi = () => {
             form.setFieldsValue({ productId: bulunan._id, birimFiyat: bulunan.birimFiyat });
         }
     };
+
     const handleUrunDegisimi = (urunId) => {
         const secilenUrun = urunler.find(u => u._id === urunId);
         if (secilenUrun) {
             form.setFieldsValue({ birimFiyat: secilenUrun.birimFiyat });
-            // 🚀 YENİ: Ürün seçince stok kodunu da doldur
             setStokArama(secilenUrun.stokKodu || '');
             setBulunanUrun(secilenUrun);
         }
@@ -79,7 +79,6 @@ const UretimListesi = () => {
             message.success("Fiş başarıyla kesildi ve firma bakiyesine yansıdı!");
             setIsModalVisible(false);
             form.resetFields();
-            // 🚀 YENİ: Modal kapanınca stok arama sıfırla
             setStokArama('');
             setBulunanUrun(null);
             verileriGetir();
@@ -176,7 +175,6 @@ const UretimListesi = () => {
                             </Form.Item>
                         </Col>
 
-                        {/* 🚀 YENİ: Stok Kodu arama alanı */}
                         <Col span={6}>
                             <Form.Item label="Stok Kodu">
                                 <Input
@@ -184,11 +182,7 @@ const UretimListesi = () => {
                                     value={stokArama}
                                     onChange={(e) => handleStokKoduAra(e.target.value)}
                                     style={{ fontFamily: 'monospace', fontWeight: 'bold', borderColor: bulunanUrun ? '#52c41a' : undefined }}
-                                    suffix={
-                                        bulunanUrun ? <span style={{ color: '#52c41a', fontSize: '11px' }}>✓</span>
-                                            : stokArama.length >= 2 ? <span style={{ color: '#ff4d4f', fontSize: '11px' }}>?</span>
-                                                : null
-                                    }
+                                    suffix={bulunanUrun ? <span style={{ color: '#52c41a', fontSize: '11px' }}>✓</span> : null}
                                 />
                             </Form.Item>
                         </Col>
