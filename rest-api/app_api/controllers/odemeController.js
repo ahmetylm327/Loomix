@@ -39,11 +39,12 @@ const odemeEkle = async (req, res) => {
 
         const isTedarikci = TEDARIKCI_KATEGORILER.includes(cariKategorisi);
 
-        // Tedarikçiden mal alımı mı?
-        const isMalAlimi = isTedarikci && gelenKategori === 'Kumaş/Malzeme';
+        // Kumaş Tedariği = kasa etkilenmez, sadece borç oluşur
+        // Kumaş/Malzeme Ödemesi = kasa düşer, borç kapanır
+        const isMalAlimi = gelenKategori === 'Kumaş Tedariği';
+        const isTedarikciOdeme = isTedarikci && gelenKategori === 'Kumaş/Malzeme Ödemesi';
 
-        // Her durumda Odeme tablosuna kayıt aç
-        // Mal alımında islemYonu = 'MalAlimi' → kasa hesabına girmez ama kayıt var
+        // Odeme tablosuna kayıt
         const yeniOdeme = await Odeme.create({
             islemYonu: isMalAlimi ? 'MalAlimi' : gelenIslemYonu,
             odemeTipi: gelenOdemeTipi,
@@ -80,16 +81,14 @@ const odemeEkle = async (req, res) => {
                 }
 
             } else if (cariHesap) {
-                if (isTedarikci) {
-                    if (isMalAlimi) {
-                        // Mal alımı: tedarikçiye borçlandık, bakiyesi artar
-                        cariHesap.bakiye += gelenTutar;
-                    } else {
-                        // Tedarikçiye ödeme: borcumuz azalır, bakiyesi düşer
-                        cariHesap.bakiye -= gelenTutar;
-                    }
-                } else {
-                    // Müşteri mantığı
+                if (isMalAlimi) {
+                    // Kumaş Tedariği: tedarikçiye borçlandık
+                    cariHesap.bakiye += gelenTutar;
+                } else if (isTedarikciOdeme) {
+                    // Kumaş/Malzeme Ödemesi: borcumuz kapandı
+                    cariHesap.bakiye -= gelenTutar;
+                } else if (!isTedarikci) {
+                    // Normal müşteri mantığı
                     if (gelenIslemYonu === 'Gelir') cariHesap.bakiye -= gelenTutar;
                     else if (gelenIslemYonu === 'Gider') cariHesap.bakiye += gelenTutar;
                 }
@@ -97,7 +96,7 @@ const odemeEkle = async (req, res) => {
             }
         }
 
-        // Güncel kasa: sadece Gelir ve Gider kayıtları dahil, MalAlimi hariç
+        // Güncel kasa: MalAlimi hariç
         const tumOdemeler = await Odeme.find({
             odemeTarihi: { $gte: KASA_BASLANGIC },
             islemYonu: { $in: ['Gelir', 'Gider'] }
@@ -112,7 +111,7 @@ const odemeEkle = async (req, res) => {
             currentCashBalance: guncelKasa,
             kasaEtkilendi: !isMalAlimi,
             mesaj: isMalAlimi
-                ? "Mal alımı kaydedildi. Kasa etkilenmedi, tedarikçi borcuna yazıldı."
+                ? "Kumaş tedariği kaydedildi. Kasa etkilenmedi, tedarikçi borcuna yazıldı."
                 : "İşlem kaydedildi ve kasa güncellendi."
         });
 
@@ -150,7 +149,7 @@ const odemeSil = async (req, res) => {
         const silinecekOdeme = await Odeme.findById(req.params.id);
         if (!silinecekOdeme) return res.status(404).json({ mesaj: "Kayıt bulunamadı." });
 
-        const { tutar, islemYonu, notlar, ilgiliId } = silinecekOdeme;
+        const { tutar, islemYonu, kategori, notlar, ilgiliId } = silinecekOdeme;
         const isOtomatik = notlar && notlar.includes('Otomatik Mahsup');
         const isMalAlimi = islemYonu === 'MalAlimi';
 
@@ -158,7 +157,6 @@ const odemeSil = async (req, res) => {
             const isci = await Personel.findById(ilgiliId).catch(() => null);
 
             if (isci) {
-                // Personel bakiyesini geri al
                 if (islemYonu === 'Gider') isci.bakiye += tutar;
                 if (islemYonu === 'Gelir') isci.bakiye -= tutar;
                 await isci.save();
@@ -172,15 +170,13 @@ const odemeSil = async (req, res) => {
                 if (cariHesap && !isOtomatik) {
                     const isTedarikci = TEDARIKCI_KATEGORILER.includes(cariHesap.kategori);
 
-                    if (isTedarikci) {
-                        if (isMalAlimi) {
-                            // Mal alımı silindi → tedarikçi borcunu geri al
-                            cariHesap.bakiye -= tutar;
-                        } else {
-                            // Ödeme silindi → tedarikçi borcu geri gelir
-                            cariHesap.bakiye += tutar;
-                        }
-                    } else {
+                    if (isMalAlimi) {
+                        // Kumaş Tedariği silindi → tedarikçi borcunu geri al
+                        cariHesap.bakiye -= tutar;
+                    } else if (isTedarikci && kategori === 'Kumaş/Malzeme Ödemesi') {
+                        // Ödeme silindi → tedarikçi borcu geri gelir
+                        cariHesap.bakiye += tutar;
+                    } else if (!isTedarikci) {
                         // Müşteri
                         if (islemYonu === 'Gelir') cariHesap.bakiye += tutar;
                         if (islemYonu === 'Gider') cariHesap.bakiye -= tutar;

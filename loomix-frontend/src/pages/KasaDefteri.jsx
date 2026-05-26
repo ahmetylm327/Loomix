@@ -7,12 +7,11 @@ import {
 import {
     PlusOutlined, WalletOutlined, ArrowUpOutlined,
     ArrowDownOutlined, EditOutlined, DeleteOutlined, MoreOutlined,
-    FileTextOutlined, GlobalOutlined, FilterOutlined
+    FileTextOutlined, GlobalOutlined, FilterOutlined, ShoppingOutlined
 } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
-import ParaInput from '../pages/ParaInput';
 
 dayjs.extend(isBetween);
 
@@ -24,6 +23,7 @@ const KasaDefteri = () => {
     const [kasaData, setKasaData] = useState([]);
     const [uretimData, setUretimData] = useState([]);
     const [konsolideData, setKonsolideData] = useState([]);
+    const [malAlimiData, setMalAlimiData] = useState([]);
 
     const [cariler, setCariler] = useState([]);
     const [personeller, setPersoneller] = useState([]);
@@ -31,7 +31,7 @@ const KasaDefteri = () => {
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
     const [editingOdeme, setEditingOdeme] = useState(null);
-    const [stats, setStats] = useState({ toplamGelir: 0, toplamGider: 0, netBakiye: 0, toplamAlacak: 0 });
+    const [stats, setStats] = useState({ toplamGelir: 0, toplamGider: 0, netBakiye: 0, toplamAlacak: 0, toplamTedarikciBorc: 0 });
     const [seciliKategori, setSeciliKategori] = useState('');
 
     const [dateRange, setDateRange] = useState(null);
@@ -52,7 +52,7 @@ const KasaDefteri = () => {
                 axiosInstance.get('/personel').catch(() => null)
             ]);
 
-            let kasalar = kasaRes.data || [];
+            let tumOdemeler = kasaRes.data || [];
             let uretimler = uretimRes.data || [];
             let firmalar = cariRes.data || [];
             let isciler = (personelRes1 && personelRes1.data) ? personelRes1.data : ((personelRes2 && personelRes2.data) ? personelRes2.data : []);
@@ -60,21 +60,37 @@ const KasaDefteri = () => {
             setCariler(firmalar);
             setPersoneller(isciler);
 
+            // Mal alımlarını ayır
+            const malAlimleri = tumOdemeler
+                .filter(k => k.islemYonu === 'MalAlimi')
+                .map(k => ({ ...k, islemTuru: 'MalAlimi' }));
+
+            // Normal kasa işlemleri (Gelir/Gider)
+            let kasalar = tumOdemeler
+                .filter(k => k.islemYonu === 'Gelir' || k.islemYonu === 'Gider')
+                .map(k => ({ ...k, islemTuru: 'Kasa' }));
+
             let gelir = 0;
             let gider = 0;
-            kasalar = kasalar.map(k => ({ ...k, islemTuru: 'Kasa' }));
             kasalar.forEach(islem => {
                 const tutarVal = Number(islem.tutar || islem.amount) || 0;
-                const yon = islem.islemYonu || islem.transactionType;
-                if (yon === 'Gelir') gelir += tutarVal;
-                else if (yon === 'Gider') gider += tutarVal;
+                if (islem.islemYonu === 'Gelir') gelir += tutarVal;
+                else if (islem.islemYonu === 'Gider') gider += tutarVal;
             });
 
+            // Müşteri alacakları (pozitif bakiyeli müşteriler)
             let gercekAlacak = 0;
+            let tedarikciBorc = 0;
             firmalar.forEach(firma => {
-                gercekAlacak += (Number(firma.bakiye) || 0);
+                const bakiye = Number(firma.bakiye) || 0;
+                if (['Tedarikçi', 'Toptancı'].includes(firma.kategori)) {
+                    tedarikciBorc += bakiye; // Tedarikçi bakiyesi = bizim borcumuz
+                } else {
+                    gercekAlacak += bakiye;  // Müşteri bakiyesi = bizim alacağımız
+                }
             });
 
+            // Üretim fişleri
             let formatliUretimler = uretimler.map(u => {
                 const uTutar = (u.quantity || 0) * (u.birimFiyat || 0);
                 return {
@@ -93,14 +109,11 @@ const KasaDefteri = () => {
             const siralamaAlgoritmasi = (a, b) => {
                 const dateA = a.odemeTarihi || a.paymentDate;
                 const dateB = b.odemeTarihi || b.paymentDate;
-
                 const dayA = dateA ? dayjs(dateA).startOf('day').valueOf() : 0;
                 const dayB = dateB ? dayjs(dateB).startOf('day').valueOf() : 0;
-
                 if (dayA !== dayB) return dayB - dayA;
-
-                const idA = a._id?.toString() || a.transactionId?.toString() || "";
-                const idB = b._id?.toString() || b.transactionId?.toString() || "";
+                const idA = a._id?.toString() || "";
+                const idB = b._id?.toString() || "";
                 return idB.localeCompare(idA);
             };
 
@@ -109,16 +122,19 @@ const KasaDefteri = () => {
             kasalar.sort(siralamaAlgoritmasi);
             formatliUretimler.sort(siralamaAlgoritmasi);
             birlesikListe.sort(siralamaAlgoritmasi);
+            malAlimleri.sort(siralamaAlgoritmasi);
 
             setKasaData(kasalar);
             setUretimData(formatliUretimler);
             setKonsolideData(birlesikListe);
+            setMalAlimiData(malAlimleri);
 
             setStats({
                 toplamGelir: gelir,
                 toplamGider: gider,
                 netBakiye: gelir - gider,
-                toplamAlacak: gercekAlacak
+                toplamAlacak: gercekAlacak,
+                toplamTedarikciBorc: tedarikciBorc
             });
 
         } catch (error) {
@@ -202,7 +218,7 @@ const KasaDefteri = () => {
         });
     };
 
-    const columns = [
+    const getColumns = (isMalAlimiTab = false) => [
         {
             title: 'İşlem Detayı',
             key: 'detay',
@@ -214,6 +230,11 @@ const KasaDefteri = () => {
                 if (record.islemTuru === 'Uretim') {
                     muhatapAdi = record.cariAdi;
                     renk = '#722ed1';
+                } else if (record.islemTuru === 'MalAlimi') {
+                    const rId = typeof record.ilgiliId === 'object' ? record.ilgiliId?._id : record.ilgiliId;
+                    const cari = cariler.find(c => c._id === rId?.toString());
+                    muhatapAdi = cari ? cari.firmaAdi : 'Bilinmeyen Tedarikçi';
+                    renk = '#d46b08';
                 } else {
                     const rId = typeof record.relatedId === 'object' ? record.relatedId?._id : record.relatedId;
                     if (rId === 'SAHSI_HARCAMA') {
@@ -253,6 +274,10 @@ const KasaDefteri = () => {
                                 <Tag color="purple" icon={<FileTextOutlined />} style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px' }}>
                                     KESİLEN FİŞ (ALACAK)
                                 </Tag>
+                            ) : record.islemTuru === 'MalAlimi' ? (
+                                <Tag color="orange" icon={<ShoppingOutlined />} style={{ fontSize: '10px', padding: '0 4px', lineHeight: '16px' }}>
+                                    KUMAŞ TEDARİĞİ (BORÇ)
+                                </Tag>
                             ) : (
                                 <Tag
                                     color={tip === 'Gelir' ? 'success' : 'error'}
@@ -279,6 +304,7 @@ const KasaDefteri = () => {
                 let isaret = '';
 
                 if (record.islemTuru === 'Uretim') { mRenk = '#722ed1'; isaret = '+'; }
+                else if (record.islemTuru === 'MalAlimi') { mRenk = '#d46b08'; isaret = '-'; }
                 else if (tip === 'Gelir') { mRenk = '#52c41a'; isaret = '+'; }
                 else if (tip === 'Gider') { mRenk = '#ff4d4f'; isaret = '-'; }
 
@@ -306,15 +332,14 @@ const KasaDefteri = () => {
                             setEditingOdeme(record);
                             const currentCat = record.kategori || record.category;
                             setSeciliKategori(currentCat);
-
                             form.setFieldsValue({
                                 ...record,
-                                islemYonu: record.islemYonu || record.transactionType,
+                                islemYonu: record.islemYonu === 'MalAlimi' ? 'Gider' : (record.islemYonu || record.transactionType),
                                 tutar: record.tutar || record.amount,
                                 kategori: currentCat,
                                 odemeTipi: record.odemeTipi || record.paymentType,
                                 odemeTarihi: dayjs(record.odemeTarihi || record.paymentDate),
-                                relatedId: record.relatedId?._id || record.relatedId,
+                                relatedId: record.ilgiliId?._id || record.ilgiliId || record.relatedId?._id || record.relatedId,
                                 notlar: record.notlar || record.notes || record.aciklama
                             });
                             setIsModalVisible(true);
@@ -342,8 +367,9 @@ const KasaDefteri = () => {
     return (
         <div style={{ padding: '15px', background: '#f5f5f5', minHeight: '100vh', overflowX: 'hidden' }}>
 
+            {/* ÜST KARTLAR */}
             <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
-                <Col xs={24} sm={8}>
+                <Col xs={24} sm={6}>
                     <Card variant="borderless" style={{ borderLeft: '5px solid #1890ff', background: '#e6f7ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                         <Statistic
                             title={<span style={{ fontWeight: 'bold' }}>1. Kasa (Sıcak Nakit)</span>}
@@ -355,7 +381,7 @@ const KasaDefteri = () => {
                         />
                     </Card>
                 </Col>
-                <Col xs={24} sm={8}>
+                <Col xs={24} sm={6}>
                     <Card variant="borderless" style={{ borderLeft: '5px solid #722ed1', background: '#f9f0ff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                         <Statistic
                             title={<span style={{ fontWeight: 'bold' }}>2. Piyasada Bekleyen (Alacaklar)</span>}
@@ -367,13 +393,25 @@ const KasaDefteri = () => {
                         />
                     </Card>
                 </Col>
-                <Col xs={24} sm={8}>
+                <Col xs={24} sm={6}>
+                    <Card variant="borderless" style={{ borderLeft: '5px solid #d46b08', background: '#fff7e6', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                        <Statistic
+                            title={<span style={{ fontWeight: 'bold' }}>3. Tedarikçi Borçları</span>}
+                            value={stats.toplamTedarikciBorc}
+                            precision={2}
+                            styles={{ content: { color: '#d46b08', fontWeight: 'bold' } }}
+                            prefix={<ShoppingOutlined />}
+                            suffix="₺"
+                        />
+                    </Card>
+                </Col>
+                <Col xs={24} sm={6}>
                     <Card variant="borderless" style={{ borderLeft: '5px solid #52c41a', background: '#f6ffed', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                         <Statistic
-                            title={<span style={{ fontWeight: 'bold' }}>3. ŞİRKET NET VARLIĞI (1 + 2)</span>}
-                            value={stats.netBakiye + stats.toplamAlacak}
+                            title={<span style={{ fontWeight: 'bold' }}>4. ŞİRKET NET VARLIĞI</span>}
+                            value={stats.netBakiye + stats.toplamAlacak - stats.toplamTedarikciBorc}
                             precision={2}
-                            styles={{ content: { color: '#52c41a', fontWeight: 'bold', fontSize: '24px' } }}
+                            styles={{ content: { color: '#52c41a', fontWeight: 'bold', fontSize: '22px' } }}
                             prefix={<GlobalOutlined />}
                             suffix="₺"
                         />
@@ -397,31 +435,18 @@ const KasaDefteri = () => {
                     </Button>
                 </div>
 
+                {/* FİLTRELEME */}
                 <div style={{ background: '#fafafa', padding: '12px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #e8e8e8' }}>
                     <Row gutter={16} align="middle">
                         <Col xs={24} sm={2}>
                             <b style={{ color: '#595959' }}><FilterOutlined /> Tabloyu Süz:</b>
                         </Col>
                         <Col xs={24} sm={10}>
-                            <RangePicker
-                                style={{ width: '100%' }}
-                                format="DD.MM.YYYY"
-                                onChange={(dates) => setDateRange(dates)}
-                                placeholder={['Başlangıç Tarihi', 'Bitiş Tarihi']}
-                            />
+                            <RangePicker style={{ width: '100%' }} format="DD.MM.YYYY" onChange={(dates) => setDateRange(dates)} placeholder={['Başlangıç Tarihi', 'Bitiş Tarihi']} />
                         </Col>
                         <Col xs={24} sm={10}>
-                            <Select
-                                style={{ width: '100%' }}
-                                placeholder="Firma Seçin (Tümü İçin Boş Bırakın)"
-                                allowClear
-                                showSearch
-                                optionFilterProp="children"
-                                onChange={(val) => setSelectedFirma(val)}
-                            >
-                                {cariler.map(cari => (
-                                    <Option key={cari._id} value={cari._id}>{cari.firmaAdi}</Option>
-                                ))}
+                            <Select style={{ width: '100%' }} placeholder="Firma Seçin (Tümü İçin Boş Bırakın)" allowClear showSearch optionFilterProp="children" onChange={(val) => setSelectedFirma(val)}>
+                                {cariler.map(cari => (<Option key={cari._id} value={cari._id}>{cari.firmaAdi}</Option>))}
                             </Select>
                         </Col>
                     </Row>
@@ -431,44 +456,37 @@ const KasaDefteri = () => {
                     {
                         key: '1',
                         label: <span><WalletOutlined /> Sadece Kasa (Nakit)</span>,
-                        children: (
-                            <Table
-                                columns={columns}
-                                dataSource={filtreleData(kasaData)}
-                                rowKey="_id"
-                                loading={loading}
-                                size="middle"
-                                pagination={{ pageSize: 10, size: 'small' }}
-                            />
-                        )
+                        children: <Table columns={getColumns()} dataSource={filtreleData(kasaData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
                     },
                     {
                         key: '2',
                         label: <span style={{ color: '#722ed1' }}><FileTextOutlined /> Sadece Fişler (Üretim)</span>,
-                        children: (
-                            <Table
-                                columns={columns}
-                                dataSource={filtreleData(uretimData)}
-                                rowKey="_id"
-                                loading={loading}
-                                size="middle"
-                                pagination={{ pageSize: 10, size: 'small' }}
-                            />
-                        )
+                        children: <Table columns={getColumns()} dataSource={filtreleData(uretimData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
                     },
                     {
                         key: '3',
                         label: <span style={{ fontWeight: 'bold', color: '#1890ff' }}><GlobalOutlined /> BÜYÜK RESİM (Tümü)</span>,
-                        children: (
-                            <Table
-                                columns={columns}
-                                dataSource={filtreleData(konsolideData)}
-                                rowKey="_id"
-                                loading={loading}
-                                size="middle"
-                                pagination={{ pageSize: 10, size: 'small' }}
-                            />
-                        )
+                        children: <Table columns={getColumns()} dataSource={filtreleData(konsolideData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }} />
+                    },
+                    {
+                        key: '4',
+                        label: <span style={{ color: '#d46b08' }}><ShoppingOutlined /> Tedarikçi Borçları</span>,
+                        children: <Table columns={getColumns(true)} dataSource={filtreleData(malAlimiData)} rowKey="_id" loading={loading} size="middle" pagination={{ pageSize: 10, size: 'small' }}
+                            summary={() => {
+                                const toplam = filtreleData(malAlimiData).reduce((acc, curr) => acc + (curr.tutar || 0), 0);
+                                return (
+                                    <Table.Summary.Row style={{ background: '#fff7e6', fontWeight: 'bold' }}>
+                                        <Table.Summary.Cell index={0} align="right">Toplam Borç:</Table.Summary.Cell>
+                                        <Table.Summary.Cell index={1} align="right">
+                                            <b style={{ color: '#d46b08', fontSize: '16px' }}>
+                                                {toplam.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+                                            </b>
+                                        </Table.Summary.Cell>
+                                        <Table.Summary.Cell index={2} />
+                                    </Table.Summary.Row>
+                                );
+                            }}
+                        />
                     }
                 ]} />
             </Card>
@@ -494,28 +512,20 @@ const KasaDefteri = () => {
                         </Col>
                         <Col xs={24} sm={12}>
                             <Form.Item name="tutar" label="Tutar (₺)" rules={[{ required: true }]}>
-                                <InputNumber
-                                    style={{ width: '100%' }}
-                                    size="large"
-                                    precision={2}
-                                    min={0.01}
-                                />
+                                <InputNumber style={{ width: '100%' }} size="large" precision={2} min={0.01} />
                             </Form.Item>
                         </Col>
                     </Row>
 
                     <Form.Item name="kategori" label="İşlem Kategorisi" rules={[{ required: true, message: 'Lütfen bir kategori seçin!' }]}>
-                        <Select
-                            placeholder="Kategori Seçiniz"
-                            size="large"
-                            onChange={(value) => {
-                                setSeciliKategori(value);
-                                form.setFieldsValue({ relatedId: undefined });
-                            }}
-                        >
+                        <Select placeholder="Kategori Seçiniz" size="large" onChange={(value) => {
+                            setSeciliKategori(value);
+                            form.setFieldsValue({ relatedId: undefined });
+                        }}>
                             <Option value="Firma (Cari) İşlemi">Genel Cari İşlemi</Option>
                             <Option value="Personel İşlemi (Maaş/Avans)">Personel İşlemi (Maaş/Avans)</Option>
-                            <Option value="Kumaş/Malzeme">Malzeme Alımı</Option>
+                            <Option value="Kumaş Tedariği">🧵 Kumaş Tedariği (Kasa Etkilenmez, Borç Oluşur)</Option>
+                            <Option value="Kumaş/Malzeme Ödemesi">💸 Kumaş/Malzeme Ödemesi (Kasa Düşer, Borç Kapanır)</Option>
                             <Option value="Fason Dikim">Fason Dikim Ödemesi</Option>
                             <Option value="Yol/Yemek">Yol / Yemek Masrafı</Option>
                             <Option value="Kira/Fatura">Kira / Fatura</Option>
