@@ -60,7 +60,6 @@ const UretimListesi = () => {
         if (bulunan) {
             setBulunanUrun(bulunan);
             form.setFieldsValue({ productId: bulunan._id, birimFiyat: bulunan.birimFiyat });
-            message.success(`"${bulunan.urunAdi}" bulundu, fiyat otomatik girildi.`);
         } else {
             setBulunanUrun(null);
         }
