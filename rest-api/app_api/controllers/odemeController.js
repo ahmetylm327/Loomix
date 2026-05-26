@@ -7,10 +7,9 @@ let PersonelHareket;
 try { PersonelHareket = mongoose.model('PersonelHareket'); } catch (error) { }
 
 const KASA_BASLANGIC = new Date('2026-01-01');
-
-// Tedarikçi/Toptancı kategorileri — kasa etkilenmeyecek olanlar
 const TEDARIKCI_KATEGORILER = ['Tedarikçi', 'Toptancı'];
 
+// 1. ÖDEME EKLE
 const odemeEkle = async (req, res) => {
     try {
         const {
@@ -21,7 +20,7 @@ const odemeEkle = async (req, res) => {
         } = req.body;
 
         const gelenIslemYonu = transactionType || islemYonu;
-        const gelenOdemeTipi = paymentType || odemeTipi;
+        const gelenOdemeTipi = paymentType || odemeTipi || 'Nakit';
         const gelenTutar = Number(amount || tutar);
         const gelenKategori = category || kategori;
         const gelenIlgiliId = relatedId || ilgiliId;
@@ -30,7 +29,7 @@ const odemeEkle = async (req, res) => {
 
         if (gelenTutar < 0.01) return res.status(400).json({ description: "Hatalı Veri: Tutar sıfır olamaz." });
 
-        // Cariyi önceden bul — tedarikçi mi müşteri mi anlamak için
+        // Cariyi bul
         let cariHesap = null;
         let cariKategorisi = null;
         if (gelenIlgiliId && gelenIlgiliId !== 'SAHSI_HARCAMA') {
@@ -40,30 +39,26 @@ const odemeEkle = async (req, res) => {
 
         const isTedarikci = TEDARIKCI_KATEGORILER.includes(cariKategorisi);
 
-        // TEDARİKÇİ/TOPTANCI MAL ALIMI:
-        // "Kumaş/Malzeme" kategorisinde ve tedarikçiye bağlıysa → kasa etkilenmez, sadece borç oluşur
-        const kasaEtkilenmesin = isTedarikci && gelenKategori === 'Kumaş/Malzeme';
+        // Tedarikçiden mal alımı mı?
+        const isMalAlimi = isTedarikci && gelenKategori === 'Kumaş/Malzeme';
 
-        // Kasaya yalnızca kasa etkilenecekse kaydet
-        let yeniOdeme = null;
-        if (!kasaEtkilenmesin) {
-            yeniOdeme = await Odeme.create({
-                islemYonu: gelenIslemYonu,
-                odemeTipi: gelenOdemeTipi,
-                tutar: gelenTutar,
-                kategori: gelenKategori,
-                ilgiliId: gelenIlgiliId,
-                odemeTarihi: gelenTarih,
-                notlar: gelenNotlar
-            });
-        }
+        // Her durumda Odeme tablosuna kayıt aç
+        // Mal alımında islemYonu = 'MalAlimi' → kasa hesabına girmez ama kayıt var
+        const yeniOdeme = await Odeme.create({
+            islemYonu: isMalAlimi ? 'MalAlimi' : gelenIslemYonu,
+            odemeTipi: gelenOdemeTipi,
+            tutar: gelenTutar,
+            kategori: gelenKategori,
+            ilgiliId: gelenIlgiliId,
+            odemeTarihi: gelenTarih,
+            notlar: gelenNotlar
+        });
 
         // Bakiye güncellemeleri
         if (gelenIlgiliId && gelenIlgiliId !== 'SAHSI_HARCAMA') {
             const isci = await Personel.findById(gelenIlgiliId).catch(() => null);
 
             if (isci) {
-                // Personel mantığı — değişmedi
                 let pIslemTipi = (gelenKategori === 'Personel İşlemi (Maaş/Avans)') ? 'Ödeme' : 'Avans';
                 if (gelenIslemYonu === 'Gider') {
                     isci.bakiye -= gelenTutar;
@@ -86,16 +81,15 @@ const odemeEkle = async (req, res) => {
 
             } else if (cariHesap) {
                 if (isTedarikci) {
-                    // TEDARİKÇİ/TOPTANCI MANTIĞI
-                    if (kasaEtkilenmesin) {
-                        // Mal alımı: sadece tedarikçide borç oluşur (bakiye artar = biz onlara borçlandık)
+                    if (isMalAlimi) {
+                        // Mal alımı: tedarikçiye borçlandık, bakiyesi artar
                         cariHesap.bakiye += gelenTutar;
                     } else {
-                        // Ödeme: tedarikçinin borcu kapanır (bakiye azalır)
+                        // Tedarikçiye ödeme: borcumuz azalır, bakiyesi düşer
                         cariHesap.bakiye -= gelenTutar;
                     }
                 } else {
-                    // MÜŞTERİ MANTIĞI — değişmedi
+                    // Müşteri mantığı
                     if (gelenIslemYonu === 'Gelir') cariHesap.bakiye -= gelenTutar;
                     else if (gelenIslemYonu === 'Gider') cariHesap.bakiye += gelenTutar;
                 }
@@ -103,18 +97,21 @@ const odemeEkle = async (req, res) => {
             }
         }
 
-        // Güncel kasa bakiyesi
-        const tumOdemeler = await Odeme.find({ odemeTarihi: { $gte: KASA_BASLANGIC } });
+        // Güncel kasa: sadece Gelir ve Gider kayıtları dahil, MalAlimi hariç
+        const tumOdemeler = await Odeme.find({
+            odemeTarihi: { $gte: KASA_BASLANGIC },
+            islemYonu: { $in: ['Gelir', 'Gider'] }
+        });
         let guncelKasa = tumOdemeler.reduce(
             (acc, o) => o.islemYonu === 'Gelir' ? acc + o.tutar : acc - o.tutar, 0
         );
 
         res.status(201).json({
-            transactionId: yeniOdeme?._id,
+            transactionId: yeniOdeme._id,
             status: "Başarılı",
             currentCashBalance: guncelKasa,
-            kasaEtkilendi: !kasaEtkilenmesin,
-            mesaj: kasaEtkilenmesin
+            kasaEtkilendi: !isMalAlimi,
+            mesaj: isMalAlimi
                 ? "Mal alımı kaydedildi. Kasa etkilenmedi, tedarikçi borcuna yazıldı."
                 : "İşlem kaydedildi ve kasa güncellendi."
         });
@@ -155,25 +152,36 @@ const odemeSil = async (req, res) => {
 
         const { tutar, islemYonu, notlar, ilgiliId } = silinecekOdeme;
         const isOtomatik = notlar && notlar.includes('Otomatik Mahsup');
+        const isMalAlimi = islemYonu === 'MalAlimi';
 
-        if (ilgiliId && ilgiliId !== 'SAHSI_HARCAMA') {
+        if (ilgiliId && ilgiliId.toString() !== 'SAHSI_HARCAMA') {
             const isci = await Personel.findById(ilgiliId).catch(() => null);
+
             if (isci) {
+                // Personel bakiyesini geri al
                 if (islemYonu === 'Gider') isci.bakiye += tutar;
                 if (islemYonu === 'Gelir') isci.bakiye -= tutar;
                 await isci.save();
                 if (PersonelHareket) {
-                    await PersonelHareket.findOneAndDelete({ personelId: isci._id, tutar: tutar }).sort({ islemTarihi: -1 });
+                    await PersonelHareket.findOneAndDelete(
+                        { personelId: isci._id, tutar: tutar }
+                    ).sort({ islemTarihi: -1 });
                 }
             } else {
                 const cariHesap = await Cari.findById(ilgiliId).catch(() => null);
                 if (cariHesap && !isOtomatik) {
                     const isTedarikci = TEDARIKCI_KATEGORILER.includes(cariHesap.kategori);
+
                     if (isTedarikci) {
-                        // Tedarikçi işlemi silince tersi: ödeme silindiyse borç geri gelir
-                        if (islemYonu === 'Gider') cariHesap.bakiye += tutar;
-                        if (islemYonu === 'Gelir') cariHesap.bakiye -= tutar;
+                        if (isMalAlimi) {
+                            // Mal alımı silindi → tedarikçi borcunu geri al
+                            cariHesap.bakiye -= tutar;
+                        } else {
+                            // Ödeme silindi → tedarikçi borcu geri gelir
+                            cariHesap.bakiye += tutar;
+                        }
                     } else {
+                        // Müşteri
                         if (islemYonu === 'Gelir') cariHesap.bakiye += tutar;
                         if (islemYonu === 'Gider') cariHesap.bakiye -= tutar;
                     }
