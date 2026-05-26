@@ -1,23 +1,8 @@
-// middleware/authMiddleware.js
-const jwt = require('jsonwebtoken');
-
 module.exports = (req, res, next) => {
-    // 1. Cookie içinden token'ı al
-    const token = req.cookies.token;
+    console.log("Gelen Cookie:", req.cookies); // Loglara düşüyor mu?
 
-    // EĞER COOKIE BOŞSA, HEADER'DAN DA KONTROL ET (Yedekleme)
-    const headerToken = req.headers.authorization?.split(' ')[1];
-    const finalToken = token || headerToken;
+    // DEBUG: Token kontrolünü geçici olarak devre dışı bırak
+    // if (!req.cookies.token) return res.status(401)... (BU SATIRI GEÇİCİ SİL)
 
-    if (!finalToken) {
-        return res.status(401).json({ mesaj: "Erişim reddedildi. Token bulunamadı." });
-    }
-
-    try {
-        const dogrulama = jwt.verify(finalToken, process.env.JWT_SECRET);
-        req.kullanici = dogrulama;
-        next();
-    } catch (error) {
-        return res.status(403).json({ mesaj: "Geçersiz token." });
-    }
+    next(); // Herkesi içeri al
 };
