@@ -14,7 +14,6 @@ const Dashboard = () => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Finansal verileri 223.000,79 formatına sokan yardımcı
     const formatPara = (val) => val?.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00";
 
     useEffect(() => {
@@ -23,7 +22,7 @@ const Dashboard = () => {
                 const res = await axiosInstance.get('/stats');
                 setStats(res.data);
             } catch (error) {
-                console.error("Dashboard yüklenemedi");
+                console.error("Dashboard yüklenemedi", error);
             } finally {
                 setLoading(false);
             }
@@ -33,13 +32,13 @@ const Dashboard = () => {
 
     if (loading) return <div style={{ textAlign: 'center', marginTop: 100 }}><Spin size="large" description="Yönetim Paneli Hazırlanıyor..." /></div>;
 
-    // --- GRAFİKLER ---
-    const lineConfig = {
-        data: stats?.haftalikUretim || [],
-        xField: 'tarih',
-        yField: 'adet',
-        point: { size: 5, shape: 'diamond' },
-        color: '#1890ff',
+    // --- GRAFİK AYARLARI ---
+    const maasConfig = {
+        data: stats?.maasAnalizi || [],
+        xField: 'hafta',
+        yField: 'tutar',
+        point: { size: 5 },
+        color: '#cf1322', // Gider olduğu için kırmızı tonu
         smooth: true,
     };
 
@@ -74,24 +73,25 @@ const Dashboard = () => {
                 <Text type="secondary">Atölyenizin güncel finansal ve operasyonel durumu.</Text>
             </div>
 
+            {/* ÜST İSTATİSTİK KARTLARI */}
             <Row gutter={[16, 16]}>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card variant="borderless" style={{ borderLeft: '5px solid #1890ff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card bordered={false} style={{ borderLeft: '5px solid #1890ff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <Statistic title="Aktif Personel" value={stats?.personelSayisi || 0} prefix={<UserOutlined style={{ color: '#1890ff' }} />} />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card variant="borderless" style={{ borderLeft: '5px solid #52c41a', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card bordered={false} style={{ borderLeft: '5px solid #52c41a', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <Statistic title="Aktif Müşteriler" value={stats?.cariSayisi || 0} prefix={<ShopOutlined style={{ color: '#52c41a' }} />} />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card variant="borderless" style={{ borderLeft: '5px solid #faad14', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card bordered={false} style={{ borderLeft: '5px solid #faad14', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <Statistic title="Sistemdeki Modeller" value={stats?.urunSayisi || 0} prefix={<PieChartOutlined style={{ color: '#faad14' }} />} />
                     </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <Card variant="borderless" style={{ borderLeft: '5px solid #f5222d', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card bordered={false} style={{ borderLeft: '5px solid #f5222d', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <Statistic
                             title={<span style={{ color: '#cf1322', fontWeight: 'bold' }}>Net Kasa Durumu</span>}
                             value={formatPara(stats?.netKasa || 0)}
@@ -105,22 +105,24 @@ const Dashboard = () => {
 
             <Divider />
 
+            {/* GRAFİKLER */}
             <Row gutter={[16, 16]}>
                 <Col xs={24} lg={16}>
-                    <Card title={<Space><LineChartOutlined /> Haftalık Üretim</Space>} variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                        <div style={{ height: 300 }}><Line {...lineConfig} /></div>
+                    <Card title={<Space><LineChartOutlined /> Haftalık Personel Maaş Giderleri</Space>} bordered={false} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <div style={{ height: 300 }}><Line {...maasConfig} /></div>
                     </Card>
                 </Col>
                 <Col xs={24} lg={8}>
-                    <Card title={<Space><PieChartOutlined /> Ürün Dağılımı</Space>} variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card title={<Space><PieChartOutlined /> Ürün Dağılımı</Space>} bordered={false} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <div style={{ height: 300 }}><Pie {...pieConfig} /></div>
                     </Card>
                 </Col>
             </Row>
 
+            {/* FİNANSAL İŞLEMLER TABLOSU */}
             <Row style={{ marginTop: 20 }}>
                 <Col span={24}>
-                    <Card title={<Space><HistoryOutlined /> Son Finansal İşlemler</Space>} variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Card title={<Space><HistoryOutlined /> Son Finansal İşlemler</Space>} bordered={false} style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <Table
                             dataSource={stats?.sonIslemler || []}
                             columns={islemSutunlar}
