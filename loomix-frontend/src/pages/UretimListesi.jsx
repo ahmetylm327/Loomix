@@ -52,19 +52,13 @@ const UretimListesi = () => {
     // 🚀 YENİ: Stok kodu arama fonksiyonu
     const handleStokKoduAra = (value) => {
         setStokArama(value);
-        if (!value || value.length < 2) {
-            setBulunanUrun(null);
-            return;
-        }
+        setBulunanUrun(null);
         const bulunan = urunler.find(u => u.stokKodu?.toLowerCase() === value.toLowerCase());
         if (bulunan) {
             setBulunanUrun(bulunan);
             form.setFieldsValue({ productId: bulunan._id, birimFiyat: bulunan.birimFiyat });
-        } else {
-            setBulunanUrun(null);
         }
     };
-
     const handleUrunDegisimi = (urunId) => {
         const secilenUrun = urunler.find(u => u._id === urunId);
         if (secilenUrun) {
