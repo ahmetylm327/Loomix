@@ -2,7 +2,7 @@ import React from 'react';
 import { Form, Input, Button, Typography, message, Divider } from 'antd';
 import { UserOutlined, LockOutlined, RocketOutlined, DotChartOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
-import axiosInstance from './axiosInstance'; // ✅ Artık axiosInstance kullanıyoruz!
+import axiosInstance from '../api/axiosInstance';
 
 const { Title, Text } = Typography;
 
