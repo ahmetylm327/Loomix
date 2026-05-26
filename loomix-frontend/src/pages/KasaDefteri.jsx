@@ -515,7 +515,7 @@ const KasaDefteri = () => {
                         >
                             <Option value="Firma (Cari) İşlemi">Genel Cari İşlemi</Option>
                             <Option value="Personel İşlemi (Maaş/Avans)">Personel İşlemi (Maaş/Avans)</Option>
-                            <Option value="Kumaş/Malzeme">Kumaş/Malzeme Alımı</Option>
+                            <Option value="Kumaş/Malzeme">Malzeme Alımı</Option>
                             <Option value="Fason Dikim">Fason Dikim Ödemesi</Option>
                             <Option value="Yol/Yemek">Yol / Yemek Masrafı</Option>
                             <Option value="Kira/Fatura">Kira / Fatura</Option>
