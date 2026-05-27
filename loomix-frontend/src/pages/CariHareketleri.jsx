@@ -131,9 +131,10 @@ const CariHareketleri = () => {
         { title: 'Tarih', dataIndex: 'tarih', width: 110, render: val => dayjs(val).format('DD.MM.YYYY') },
         { title: 'İşlem Cinsi', dataIndex: 'islemCinsi', width: 140, render: val => <b>{val}</b> },
         { title: 'Açıklama', dataIndex: 'aciklama' },
-        { title: 'Borç (TL)', dataIndex: 'borc', align: 'right', width: 110, render: val => val > 0 ? <Text type="danger">{val.toLocaleString('tr-TR')} ₺</Text> : '-' },
-        { title: 'Alacak (TL)', dataIndex: 'alacak', align: 'right', width: 110, render: val => val > 0 ? <Text type="success">{val.toLocaleString('tr-TR')} ₺</Text> : '-' },
-        { title: 'Bakiye', dataIndex: 'yuruyenBakiye', align: 'right', width: 120, render: val => <b style={{ color: val > 0 ? '#cf1322' : '#000' }}>{val.toLocaleString('tr-TR')} ₺</b> }
+        // 🚀 DÜZELTME: Borç ve Alacak sütunlarında mutlak değer (Math.abs) kontrolü kullanıldı.
+        { title: 'Borç (TL)', dataIndex: 'borc', align: 'right', width: 110, render: val => (val && Math.abs(val) > 0) ? <Text type="danger">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
+        { title: 'Alacak (TL)', dataIndex: 'alacak', align: 'right', width: 110, render: val => (val && Math.abs(val) > 0) ? <Text type="success">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
+        { title: 'Bakiye', dataIndex: 'yuruyenBakiye', align: 'right', width: 120, render: val => <b style={{ color: val > 0 ? '#cf1322' : '#000' }}>{Number(val || 0).toLocaleString('tr-TR')} ₺</b> }
     ];
 
     return (
@@ -172,8 +173,9 @@ const CariHareketleri = () => {
                     summary={() => (
                         <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold', fontSize: '14px' }}>
                             <Table.Summary.Cell index={0} colSpan={3} align="right">GENEL TOPLAM:</Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right"><Text type="danger">{Number(ekstreOzet.toplamBorc || 0).toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} align="right"><Text type="success">{Number(ekstreOzet.toplamAlacak || 0).toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
+                            {/* 🚀 DÜZELTME: Toplamlarda da mutlak değer kullanıldı */}
+                            <Table.Summary.Cell index={1} align="right"><Text type="danger">{Math.abs(Number(ekstreOzet.toplamBorc || 0)).toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={2} align="right"><Text type="success">{Math.abs(Number(ekstreOzet.toplamAlacak || 0)).toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
                             <Table.Summary.Cell index={3} align="right">
                                 <span style={{ color: ekstreOzet.bakiye > 0 ? '#cf1322' : '#000' }}>{Number(ekstreOzet.bakiye || 0).toLocaleString('tr-TR')} ₺</span>
                             </Table.Summary.Cell>
