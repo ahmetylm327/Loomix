@@ -122,7 +122,15 @@ const MaasYonetimi = () => {
                             { title: 'Personel', dataIndex: 'isim' },
                             {
                                 title: 'Bu Hafta Hakediş (Düzenlenebilir)', dataIndex: 'duzenlenenTutar', render: (val, r) => (
-                                    <InputNumber value={val} onChange={(v) => setVeriler(prev => prev.map(i => i.pId === r.pId ? { ...i, duzenlenenTutar: v } : i))} />
+                                    <InputNumber
+                                        value={val}
+                                        style={{ width: '150px' }}
+                                        // Yazarken araya nokta koyar (Örn: 17.000)
+                                        formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                                        // Arka plana temiz sayı olarak gönderir
+                                        parser={(value) => value?.replace(/\./g, '')}
+                                        onChange={(v) => setVeriler(prev => prev.map(i => i.pId === r.pId ? { ...i, duzenlenenTutar: v } : i))}
+                                    />
                                 )
                             }
                         ]} summary={() => (
@@ -161,9 +169,15 @@ const MaasYonetimi = () => {
                         { title: 'Personel', dataIndex: ['personelId', 'adSoyad'] },
                         {
                             title: 'Tutar', render: (v, r) => (
-                                <InputNumber defaultValue={Math.abs(r.tutar)} onChange={(val) => {
-                                    setSeciliPaketDetaylari(prev => prev.map(i => i._id === r._id ? { ...i, tutar: -val } : i));
-                                }} />
+                                <InputNumber
+                                    defaultValue={Math.abs(r.tutar)}
+                                    style={{ width: '150px' }}
+                                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                                    parser={(value) => value?.replace(/\./g, '')}
+                                    onChange={(val) => {
+                                        setSeciliPaketDetaylari(prev => prev.map(i => i._id === r._id ? { ...i, tutar: -val } : i));
+                                    }}
+                                />
                             )
                         }
                     ]} pagination={false} />
