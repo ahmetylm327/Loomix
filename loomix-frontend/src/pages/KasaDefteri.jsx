@@ -524,11 +524,13 @@ const KasaDefteri = () => {
                         }}>
                             <Option value="Firma (Cari) İşlemi">Genel Cari İşlemi</Option>
                             <Option value="Personel İşlemi (Maaş/Avans)">Personel İşlemi (Maaş/Avans)</Option>
-                            <Option value="Kumaş Tedariği">🧵 Kumaş Tedariği (Kasa Etkilenmez, Borç Oluşur)</Option>
-                            <Option value="Kumaş/Malzeme Ödemesi">💸 Kumaş/Malzeme Ödemesi (Kasa Düşer, Borç Kapanır)</Option>
-                            <Option value="Fason Dikim">Fason Dikim Ödemesi</Option>
-                            <Option value="Yol/Yemek">Yol / Yemek Masrafı</Option>
-                            <Option value="Kira/Fatura">Kira / Fatura</Option>
+                            <Option value="Kumaş Tedariği">🧵 Malzeme Tedariği</Option>
+                            <Option value="Kumaş/Malzeme Ödemesi">💸Malzeme Ödemesi</Option>
+                            <Option value="Elektrik Faturası">⚡ Elektrik Faturası</Option>
+                            <Option value="Su Faturası">💧 Su Faturası</Option>
+                            <Option value="Ortak Gider">🤝 Ortak Gider</Option>
+                            <Option value="Dükkan Kirası">🏠 Dükkan Kirası</Option>
+                            <Option value="SSK">📋 SSK</Option>
                             <Option value="Diğer">Diğer</Option>
                         </Select>
                     </Form.Item>
