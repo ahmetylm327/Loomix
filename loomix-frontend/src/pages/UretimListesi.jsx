@@ -115,6 +115,8 @@ const UretimListesi = () => {
     });
 
     const toplamFiltreliTutar = filteredUretimler.reduce((acc, curr) => acc + (curr.quantity * (curr.birimFiyat || 0)), 0);
+    // YENİ EKLENEN SATIR: Adet Toplamı
+    const toplamFiltreliAdet = filteredUretimler.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
 
     const columns = [
         { title: 'Tarih', dataIndex: 'productionDate', render: (text) => <b>{dayjs(text).format('DD.MM.YYYY')}</b> },
@@ -156,9 +158,20 @@ const UretimListesi = () => {
                 <Table dataSource={filteredUretimler} columns={columns} rowKey="_id" loading={loading} pagination={{ pageSize: 10 }}
                     summary={() => (
                         <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold' }}>
-                            <Table.Summary.Cell index={0} colSpan={5} align="right">Toplam:</Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right"><span style={{ color: '#52c41a', fontSize: '16px' }}>{toplamFiltreliTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span></Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} colSpan={2}></Table.Summary.Cell>
+                            <Table.Summary.Cell index={0} colSpan={3} align="right">Toplam:</Table.Summary.Cell>
+
+                            {/* YENİ EKLENEN SÜTUN: Adet */}
+                            <Table.Summary.Cell index={1} align="right">
+                                <span style={{ color: '#1890ff', fontSize: '15px' }}>{toplamFiltreliAdet} Adet</span>
+                            </Table.Summary.Cell>
+
+                            <Table.Summary.Cell index={2} align="right"></Table.Summary.Cell>
+
+                            <Table.Summary.Cell index={3} align="right">
+                                <span style={{ color: '#52c41a', fontSize: '16px' }}>{toplamFiltreliTutar.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span>
+                            </Table.Summary.Cell>
+
+                            <Table.Summary.Cell index={4} colSpan={2}></Table.Summary.Cell>
                         </Table.Summary.Row>
                     )}
                 />
