@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Table, Modal, Form, Select, InputNumber, DatePicker, Input, message, Row, Col, Typography, Tag, Popconfirm, Space } from 'antd';
-import { PlusOutlined, DeleteOutlined, FileDoneOutlined, FilterOutlined } from '@ant-design/icons';
+import { Card, Button, Table, Modal, Form, Select, InputNumber, DatePicker, Input, message, Row, Col, Typography, Tag, Popconfirm } from 'antd';
+// 🚀 YENİ İKON EKLENDİ: FileExcelOutlined
+import { PlusOutlined, DeleteOutlined, FileDoneOutlined, FilterOutlined, FileExcelOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
@@ -19,11 +20,9 @@ const UretimListesi = () => {
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
 
-    // 🚀 FİLTRELEME STATE'LERİ
     const [dateRange, setDateRange] = useState(null);
     const [selectedFirma, setSelectedFirma] = useState(null);
 
-    // 🚀 YENİ: Stok kodu arama state'leri
     const [stokArama, setStokArama] = useState('');
     const [bulunanUrun, setBulunanUrun] = useState(null);
 
@@ -49,7 +48,6 @@ const UretimListesi = () => {
         }
     };
 
-    // 🚀 YENİ: Stok kodu arama fonksiyonu
     const handleStokKoduAra = (value) => {
         setStokArama(value);
         setBulunanUrun(null);
@@ -97,7 +95,6 @@ const UretimListesi = () => {
         }
     };
 
-    // 🚀 FİLTRELEME MANTIĞI
     const filteredUretimler = uretimler.filter(item => {
         let dateMatch = true;
         let firmaMatch = true;
@@ -115,8 +112,50 @@ const UretimListesi = () => {
     });
 
     const toplamFiltreliTutar = filteredUretimler.reduce((acc, curr) => acc + (curr.quantity * (curr.birimFiyat || 0)), 0);
-    // YENİ EKLENEN SATIR: Adet Toplamı
     const toplamFiltreliAdet = filteredUretimler.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
+
+    // 🚀 YENİ: EXCEL'E AKTARMA FONKSİYONU (Hiçbir paket gerektirmez)
+    const handleExcelIndir = () => {
+        if (filteredUretimler.length === 0) {
+            message.warning("İndirilecek veri bulunamadı.");
+            return;
+        }
+
+        // CSV Başlıkları
+        const basliklar = ["Tarih", "Firma", "Urun", "Adet", "Birim Fiyat", "Fis Tutari", "Notlar"];
+
+        // Verileri satırlara çeviriyoruz
+        const satirlar = filteredUretimler.map(item => {
+            const tarih = dayjs(item.productionDate).format('DD.MM.YYYY');
+            const firma = (item.cariId?.firmaAdi || 'Bilinmiyor').replace(/,/g, ''); // Virgülleri temizle
+            const urun = (item.productId?.urunAdi || 'Silinmiş Ürün').replace(/,/g, '');
+            const adet = item.quantity;
+            const fiyat = item.birimFiyat || 0;
+            const tutar = adet * fiyat;
+            const not = (item.notes || '').replace(/,/g, ' '); // Notlardaki virgülleri boşluk yap
+
+            return `${tarih},${firma},${urun},${adet},${fiyat},${tutar},${not}`;
+        });
+
+        // En alta Toplam satırını ekliyoruz
+        satirlar.push(`,,,,,,`); // Bir boş satır
+        satirlar.push(`TOPLAM,,,${toplamFiltreliAdet} Adet,,${toplamFiltreliTutar} TL,`);
+
+        // UTF-8 BOM ekleyerek Türkçe karakter (ş, ı, ğ vs.) sorununu çözüyoruz
+        const csvIcerik = "\uFEFF" + basliklar.join(',') + '\n' + satirlar.join('\n');
+
+        // Tarayıcı üzerinden dosyayı indiriyoruz
+        const blob = new Blob([csvIcerik], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Uretim_Raporu_${dayjs().format('DD_MM_YYYY')}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        message.success("Rapor Excel (CSV) formatında indirildi.");
+    };
 
     const columns = [
         { title: 'Tarih', dataIndex: 'productionDate', render: (text) => <b>{dayjs(text).format('DD.MM.YYYY')}</b> },
@@ -138,9 +177,20 @@ const UretimListesi = () => {
     return (
         <div style={{ padding: '20px', background: '#f0f2f5', minHeight: '100vh' }}>
             <Card style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                {/* 🚀 ÜST BAŞLIK VE BUTONLAR */}
                 <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
                     <Title level={4}><FileDoneOutlined /> Üretim Fişleri</Title>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalVisible(true)}>Yeni Fiş Kes</Button>
+                    <div>
+                        <Button
+                            type="default"
+                            icon={<FileExcelOutlined />}
+                            onClick={handleExcelIndir}
+                            style={{ marginRight: '10px', color: '#52c41a', borderColor: '#52c41a' }}
+                        >
+                            Excel İndir
+                        </Button>
+                        <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalVisible(true)}>Yeni Fiş Kes</Button>
+                    </div>
                 </Row>
 
                 <div style={{ background: '#fafafa', padding: '15px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e8e8e8' }}>
@@ -160,7 +210,6 @@ const UretimListesi = () => {
                         <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold' }}>
                             <Table.Summary.Cell index={0} colSpan={3} align="right">Toplam:</Table.Summary.Cell>
 
-                            {/* YENİ EKLENEN SÜTUN: Adet */}
                             <Table.Summary.Cell index={1} align="right">
                                 <span style={{ color: '#1890ff', fontSize: '15px' }}>{toplamFiltreliAdet} Adet</span>
                             </Table.Summary.Cell>
