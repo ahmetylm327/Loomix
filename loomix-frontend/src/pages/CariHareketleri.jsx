@@ -41,7 +41,15 @@ const CariHareketleri = () => {
         setEkstreLoading(true);
         try {
             const res = await axiosInstance.get(`/caris/${cari._id}/ekstre`);
-            setEkstreData(res.data.liste);
+
+            // Kasa işlemlerini isim olarak daha anlaşılır yapıyoruz
+            const isTedarikci = cari.kategori === 'Tedarikçi' || cari.kategori === 'Toptancı';
+            const duzenlenmisListe = res.data.liste.map(item => ({
+                ...item,
+                islemCinsi: (isTedarikci && item.islemCinsi === "Üretim / Fiş Kesimi") ? "Malzeme Alımı (Fiş)" : item.islemCinsi
+            }));
+
+            setEkstreData(duzenlenmisListe);
             setEkstreOzet({
                 toplamBorc: res.data.toplamBorc,
                 toplamAlacak: res.data.toplamAlacak,
@@ -54,10 +62,11 @@ const CariHareketleri = () => {
         }
     };
 
-    // 🚀 DİNAMİK BAŞLIK: Ekranda kafa karışıklığını önlemek için sadece görsel olarak başlıkları değiştiriyoruz.
+    // 🚀 DİNAMİK BAŞLIKLAR
     const isTedarikci = seciliCari?.kategori === 'Tedarikçi' || seciliCari?.kategori === 'Toptancı';
-    const borcBaslik = isTedarikci ? 'Yaptığımız Ödeme (Gider)' : 'Kestiğimiz Fiş/Borç';
-    const alacakBaslik = isTedarikci ? 'Aldığımız Malzeme/Alacak' : 'Aldığımız Tahsilat';
+    const borcBaslik = isTedarikci ? 'Yaptığımız Ödeme' : 'Kestiğimiz Fiş/Borç';
+    const alacakBaslik = isTedarikci ? 'Aldığımız Malzeme' : 'Aldığımız Tahsilat';
+    const bakiyeBaslik = 'Bakiye'; // İstediğin gibi bakiye olarak bırakıldı
 
     const exportEkstreExcel = () => {
         if (!ekstreData || ekstreData.length === 0) return message.warning("Veri yok!");
@@ -67,7 +76,7 @@ const CariHareketleri = () => {
             "Açıklama": item.aciklama || '-',
             [borcBaslik]: Math.abs(Number(item.borc || 0)),
             [alacakBaslik]: Math.abs(Number(item.alacak || 0)),
-            "Kalan Bakiye": item.yuruyenBakiye
+            [bakiyeBaslik]: Math.abs(Number(item.yuruyenBakiye || 0))
         }));
         const worksheet = XLSX.utils.json_to_sheet(excelData);
         const workbook = XLSX.utils.book_new();
@@ -84,7 +93,7 @@ const CariHareketleri = () => {
         doc.setFontSize(10);
         doc.text(`Tarih: ${dayjs().format('DD.MM.YYYY')}`, 40, 55);
 
-        const tableColumn = ["Tarih", "Islem Cinsi", "Aciklama", borcBaslik, alacakBaslik, "Bakiye"];
+        const tableColumn = ["Tarih", "Islem Cinsi", "Aciklama", borcBaslik, alacakBaslik, bakiyeBaslik];
         const tableRows = ekstreData.map(item => [
             dayjs(item.tarih).format('DD.MM.YYYY'),
             item.islemCinsi,
@@ -116,7 +125,8 @@ const CariHareketleri = () => {
             align: 'right',
             render: val => (
                 <Tag color={val > 0 ? "error" : (val < 0 ? "success" : "default")} style={{ fontSize: '14px', padding: '4px 8px' }}>
-                    {val > 0 ? `Bize Borçlu: ${val.toLocaleString('tr-TR')} ₺` : (val < 0 ? `Bizden Alacaklı: ${Math.abs(val).toLocaleString('tr-TR')} ₺` : 'Bakiye Sıfır')}
+                    {/* Bize borçlu ve Bizden Alacaklı durumları korundu */}
+                    {val > 0 ? `Bize Borçlu: ${val.toLocaleString('tr-TR')} ₺` : (val < 0 ? `Bizden Alacaklı (Borcumuz): ${Math.abs(val).toLocaleString('tr-TR')} ₺` : 'Bakiye Sıfır')}
                 </Tag>
             )
         },
@@ -134,9 +144,8 @@ const CariHareketleri = () => {
 
     const ekstreColumns = [
         { title: 'Tarih', dataIndex: 'tarih', width: 110, render: val => dayjs(val).format('DD.MM.YYYY') },
-        { title: 'İşlem Cinsi', dataIndex: 'islemCinsi', width: 130, render: val => <b>{val}</b> },
+        { title: 'İşlem Cinsi', dataIndex: 'islemCinsi', width: 140, render: val => <b>{val}</b> },
         { title: 'Açıklama', dataIndex: 'aciklama' },
-        // 🚀 DÜZELTME: Tire (-) hatasını çözen yer. Artık backend'den negatif/pozitif ne gelirse gelsin ekrana basıyor.
         {
             title: borcBaslik,
             dataIndex: 'borc',
@@ -158,20 +167,21 @@ const CariHareketleri = () => {
             }
         },
         {
-            title: 'Bakiye',
+            title: bakiyeBaslik,
             dataIndex: 'yuruyenBakiye',
             align: 'right',
-            width: 140,
+            width: 150,
             render: val => {
                 const bakiye = Number(val || 0);
                 return (
                     <div style={{ lineHeight: '1.2' }}>
-                        <b style={{ color: bakiye > 0 ? '#cf1322' : (bakiye < 0 ? '#52c41a' : '#000') }}>
+                        <b style={{ color: bakiye > 0 ? '#cf1322' : (bakiye < 0 ? '#52c41a' : '#000'), fontSize: '14px' }}>
                             {bakiye === 0 ? '0 ₺' : `${Math.abs(bakiye).toLocaleString('tr-TR')} ₺`}
                         </b>
                         <br />
-                        <span style={{ fontSize: '10px', color: '#8c8c8c' }}>
-                            {bakiye > 0 ? '(Bize Borçlu)' : (bakiye < 0 ? '(Bizden Alacaklı)' : '')}
+                        <span style={{ fontSize: '11px', color: '#8c8c8c' }}>
+                            {/* Negatif durumlarda borcumuz olduğunu net belirttik */}
+                            {bakiye > 0 ? '(Bize Borçlu)' : (bakiye < 0 ? '(Bizden Alacaklı / Borcumuz)' : '')}
                         </span>
                     </div>
                 )
@@ -230,12 +240,12 @@ const CariHareketleri = () => {
 
                             <Table.Summary.Cell index={3} align="right">
                                 <div style={{ lineHeight: '1.2' }}>
-                                    <span style={{ color: ekstreOzet.bakiye > 0 ? '#cf1322' : (ekstreOzet.bakiye < 0 ? '#52c41a' : '#000') }}>
+                                    <b style={{ color: ekstreOzet.bakiye > 0 ? '#cf1322' : (ekstreOzet.bakiye < 0 ? '#52c41a' : '#000'), fontSize: '14px' }}>
                                         {Math.abs(Number(ekstreOzet.bakiye || 0)).toLocaleString('tr-TR')} ₺
-                                    </span>
+                                    </b>
                                     <br />
-                                    <span style={{ fontSize: '10px', color: '#8c8c8c' }}>
-                                        {ekstreOzet.bakiye > 0 ? '(Bize Borçlu)' : (ekstreOzet.bakiye < 0 ? '(Bizden Alacaklı)' : '')}
+                                    <span style={{ fontSize: '11px', color: '#8c8c8c', fontWeight: 'normal' }}>
+                                        {ekstreOzet.bakiye > 0 ? '(Bize Borçlu)' : (ekstreOzet.bakiye < 0 ? '(Bizden Alacaklı / Borcumuz)' : '')}
                                     </span>
                                 </div>
                             </Table.Summary.Cell>
