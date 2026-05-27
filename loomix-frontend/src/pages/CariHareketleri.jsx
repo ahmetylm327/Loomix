@@ -54,14 +54,19 @@ const CariHareketleri = () => {
         }
     };
 
+    // 🚀 DİNAMİK BAŞLIK: Ekranda kafa karışıklığını önlemek için sadece görsel olarak başlıkları değiştiriyoruz.
+    const isTedarikci = seciliCari?.kategori === 'Tedarikçi' || seciliCari?.kategori === 'Toptancı';
+    const borcBaslik = isTedarikci ? 'Yaptığımız Ödeme (Gider)' : 'Kestiğimiz Fiş/Borç';
+    const alacakBaslik = isTedarikci ? 'Aldığımız Malzeme/Alacak' : 'Aldığımız Tahsilat';
+
     const exportEkstreExcel = () => {
         if (!ekstreData || ekstreData.length === 0) return message.warning("Veri yok!");
         const excelData = ekstreData.map(item => ({
             "Tarih": dayjs(item.tarih).format('DD.MM.YYYY'),
             "İşlem Cinsi": item.islemCinsi,
-            "Açıklama": item.aciklama,
-            "Borç (Bize Olan)": item.borc,
-            "Alacak (Ödenen)": item.alacak,
+            "Açıklama": item.aciklama || '-',
+            [borcBaslik]: Math.abs(Number(item.borc || 0)),
+            [alacakBaslik]: Math.abs(Number(item.alacak || 0)),
             "Kalan Bakiye": item.yuruyenBakiye
         }));
         const worksheet = XLSX.utils.json_to_sheet(excelData);
@@ -79,14 +84,14 @@ const CariHareketleri = () => {
         doc.setFontSize(10);
         doc.text(`Tarih: ${dayjs().format('DD.MM.YYYY')}`, 40, 55);
 
-        const tableColumn = ["Tarih", "Islem Cinsi", "Aciklama", "Borc (TL)", "Alacak (TL)", "Bakiye"];
+        const tableColumn = ["Tarih", "Islem Cinsi", "Aciklama", borcBaslik, alacakBaslik, "Bakiye"];
         const tableRows = ekstreData.map(item => [
             dayjs(item.tarih).format('DD.MM.YYYY'),
             item.islemCinsi,
             item.aciklama || '-',
-            item.borc.toLocaleString('tr-TR'),
-            item.alacak.toLocaleString('tr-TR'),
-            item.yuruyenBakiye.toLocaleString('tr-TR')
+            Math.abs(Number(item.borc || 0)).toLocaleString('tr-TR'),
+            Math.abs(Number(item.alacak || 0)).toLocaleString('tr-TR'),
+            Math.abs(Number(item.yuruyenBakiye || 0)).toLocaleString('tr-TR')
         ]);
 
         autoTable(doc, { head: [tableColumn], body: tableRows, startY: 70, theme: 'grid', headStyles: { fillColor: [24, 144, 255] }, styles: { fontSize: 8 } });
@@ -129,12 +134,49 @@ const CariHareketleri = () => {
 
     const ekstreColumns = [
         { title: 'Tarih', dataIndex: 'tarih', width: 110, render: val => dayjs(val).format('DD.MM.YYYY') },
-        { title: 'İşlem Cinsi', dataIndex: 'islemCinsi', width: 140, render: val => <b>{val}</b> },
+        { title: 'İşlem Cinsi', dataIndex: 'islemCinsi', width: 130, render: val => <b>{val}</b> },
         { title: 'Açıklama', dataIndex: 'aciklama' },
-        // 🚀 DÜZELTME: Borç ve Alacak sütunlarında mutlak değer (Math.abs) kontrolü kullanıldı.
-        { title: 'Borç (TL)', dataIndex: 'borc', align: 'right', width: 110, render: val => (val && Math.abs(val) > 0) ? <Text type="danger">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
-        { title: 'Alacak (TL)', dataIndex: 'alacak', align: 'right', width: 110, render: val => (val && Math.abs(val) > 0) ? <Text type="success">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
-        { title: 'Bakiye', dataIndex: 'yuruyenBakiye', align: 'right', width: 120, render: val => <b style={{ color: val > 0 ? '#cf1322' : '#000' }}>{Number(val || 0).toLocaleString('tr-TR')} ₺</b> }
+        // 🚀 DÜZELTME: Tire (-) hatasını çözen yer. Artık backend'den negatif/pozitif ne gelirse gelsin ekrana basıyor.
+        {
+            title: borcBaslik,
+            dataIndex: 'borc',
+            align: 'right',
+            width: 140,
+            render: val => {
+                const miktar = Math.abs(Number(val || 0));
+                return miktar > 0 ? <Text type={isTedarikci ? "success" : "danger"}>{miktar.toLocaleString('tr-TR')} ₺</Text> : '-';
+            }
+        },
+        {
+            title: alacakBaslik,
+            dataIndex: 'alacak',
+            align: 'right',
+            width: 140,
+            render: val => {
+                const miktar = Math.abs(Number(val || 0));
+                return miktar > 0 ? <Text type={isTedarikci ? "danger" : "success"}>{miktar.toLocaleString('tr-TR')} ₺</Text> : '-';
+            }
+        },
+        {
+            title: 'Bakiye',
+            dataIndex: 'yuruyenBakiye',
+            align: 'right',
+            width: 140,
+            render: val => {
+                const bakiye = Number(val || 0);
+                return (
+                    <div style={{ lineHeight: '1.2' }}>
+                        <b style={{ color: bakiye > 0 ? '#cf1322' : (bakiye < 0 ? '#52c41a' : '#000') }}>
+                            {bakiye === 0 ? '0 ₺' : `${Math.abs(bakiye).toLocaleString('tr-TR')} ₺`}
+                        </b>
+                        <br />
+                        <span style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                            {bakiye > 0 ? '(Bize Borçlu)' : (bakiye < 0 ? '(Bizden Alacaklı)' : '')}
+                        </span>
+                    </div>
+                )
+            }
+        }
     ];
 
     return (
@@ -173,11 +215,29 @@ const CariHareketleri = () => {
                     summary={() => (
                         <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold', fontSize: '14px' }}>
                             <Table.Summary.Cell index={0} colSpan={3} align="right">GENEL TOPLAM:</Table.Summary.Cell>
-                            {/* 🚀 DÜZELTME: Toplamlarda da mutlak değer kullanıldı */}
-                            <Table.Summary.Cell index={1} align="right"><Text type="danger">{Math.abs(Number(ekstreOzet.toplamBorc || 0)).toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} align="right"><Text type="success">{Math.abs(Number(ekstreOzet.toplamAlacak || 0)).toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
+
+                            <Table.Summary.Cell index={1} align="right">
+                                <Text type={isTedarikci ? "success" : "danger"}>
+                                    {Math.abs(Number(ekstreOzet.toplamBorc || 0)).toLocaleString('tr-TR')} ₺
+                                </Text>
+                            </Table.Summary.Cell>
+
+                            <Table.Summary.Cell index={2} align="right">
+                                <Text type={isTedarikci ? "danger" : "success"}>
+                                    {Math.abs(Number(ekstreOzet.toplamAlacak || 0)).toLocaleString('tr-TR')} ₺
+                                </Text>
+                            </Table.Summary.Cell>
+
                             <Table.Summary.Cell index={3} align="right">
-                                <span style={{ color: ekstreOzet.bakiye > 0 ? '#cf1322' : '#000' }}>{Number(ekstreOzet.bakiye || 0).toLocaleString('tr-TR')} ₺</span>
+                                <div style={{ lineHeight: '1.2' }}>
+                                    <span style={{ color: ekstreOzet.bakiye > 0 ? '#cf1322' : (ekstreOzet.bakiye < 0 ? '#52c41a' : '#000') }}>
+                                        {Math.abs(Number(ekstreOzet.bakiye || 0)).toLocaleString('tr-TR')} ₺
+                                    </span>
+                                    <br />
+                                    <span style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                                        {ekstreOzet.bakiye > 0 ? '(Bize Borçlu)' : (ekstreOzet.bakiye < 0 ? '(Bizden Alacaklı)' : '')}
+                                    </span>
+                                </div>
                             </Table.Summary.Cell>
                         </Table.Summary.Row>
                     )}
