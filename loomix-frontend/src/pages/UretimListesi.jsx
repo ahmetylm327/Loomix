@@ -114,7 +114,7 @@ const UretimListesi = () => {
     const toplamFiltreliTutar = filteredUretimler.reduce((acc, curr) => acc + (curr.quantity * (curr.birimFiyat || 0)), 0);
     const toplamFiltreliAdet = filteredUretimler.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
 
-    // 🚀 YENİ: EXCEL'E AKTARMA FONKSİYONU (Hiçbir paket gerektirmez)
+    // 🚀 EXCEL'E AKTARMA FONKSİYONU (NOKTALI VİRGÜL İLE DÜZELTİLDİ)
     const handleExcelIndir = () => {
         if (filteredUretimler.length === 0) {
             message.warning("İndirilecek veri bulunamadı.");
@@ -127,22 +127,24 @@ const UretimListesi = () => {
         // Verileri satırlara çeviriyoruz
         const satirlar = filteredUretimler.map(item => {
             const tarih = dayjs(item.productionDate).format('DD.MM.YYYY');
-            const firma = (item.cariId?.firmaAdi || 'Bilinmiyor').replace(/,/g, ''); // Virgülleri temizle
-            const urun = (item.productId?.urunAdi || 'Silinmiş Ürün').replace(/,/g, '');
+            // Hücre içindeki noktalı virgülleri temizliyoruz ki sütun kayması olmasın
+            const firma = (item.cariId?.firmaAdi || 'Bilinmiyor').replace(/;/g, ' ');
+            const urun = (item.productId?.urunAdi || 'Silinmiş Ürün').replace(/;/g, ' ');
             const adet = item.quantity;
             const fiyat = item.birimFiyat || 0;
             const tutar = adet * fiyat;
-            const not = (item.notes || '').replace(/,/g, ' '); // Notlardaki virgülleri boşluk yap
+            const not = (item.notes || '').replace(/;/g, ' ');
 
-            return `${tarih},${firma},${urun},${adet},${fiyat},${tutar},${not}`;
+            // Excel için Türkçe formatında ayırıcı olarak NOKTALI VİRGÜL (;) kullanıyoruz
+            return `${tarih};${firma};${urun};${adet};${fiyat};${tutar};${not}`;
         });
 
         // En alta Toplam satırını ekliyoruz
-        satirlar.push(`,,,,,,`); // Bir boş satır
-        satirlar.push(`TOPLAM,,,${toplamFiltreliAdet} Adet,,${toplamFiltreliTutar} TL,`);
+        satirlar.push(`;;;;;;`); // Bir boş satır
+        satirlar.push(`TOPLAM;;;${toplamFiltreliAdet} Adet;;${toplamFiltreliTutar} TL;`);
 
-        // UTF-8 BOM ekleyerek Türkçe karakter (ş, ı, ğ vs.) sorununu çözüyoruz
-        const csvIcerik = "\uFEFF" + basliklar.join(',') + '\n' + satirlar.join('\n');
+        // UTF-8 BOM ekleyerek Türkçe karakter (ş, ı, ğ vs.) sorununu çözüyoruz ve başlıkları ; ile birleştiriyoruz
+        const csvIcerik = "\uFEFF" + basliklar.join(';') + '\n' + satirlar.join('\n');
 
         // Tarayıcı üzerinden dosyayı indiriyoruz
         const blob = new Blob([csvIcerik], { type: 'text/csv;charset=utf-8;' });
