@@ -6,7 +6,7 @@ import axiosInstance from '../api/axiosInstance';
 
 const { Title, Text } = Typography;
 
-const Login = () => {
+const Login = ({ setGirisYapildi }) => {
     const navigate = useNavigate();
 
     const onFinish = async (values) => {
@@ -26,7 +26,7 @@ const Login = () => {
                 duration: 2
             });
 
-            // ✅ Token kaydetmeye gerek yok, backend cookie'yi zaten gönderdi!
+            setGirisYapildi(true);
             navigate('/');
         } catch (error) {
             console.error('Login Hatası:', error);
