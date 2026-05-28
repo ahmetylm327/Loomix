@@ -19,6 +19,8 @@ const Login = ({ setGirisYapildi }) => {
                 password: values.password
             });
 
+            localStorage.setItem('loomix_token', response.data.token);
+
             // Başarılı giriş
             message.success({
                 content: response.data.mesaj || 'Hoş geldiniz, Ahmet!',

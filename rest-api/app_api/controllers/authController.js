@@ -60,7 +60,7 @@ exports.girisYap = async (req, res) => {
             maxAge: 24 * 60 * 60 * 1000 // 24 saat
         });
 
-        res.status(200).json({ mesaj: "Giriş başarılı", rol: kullanici.rol });
+        res.status(200).json({ mesaj: "Giriş başarılı", rol: kullanici.rol, token: token });
 
     } catch (hata) {
         res.status(500).json({ mesaj: "Sunucu hatası!" });

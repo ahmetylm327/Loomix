@@ -45,6 +45,7 @@ const AppContent = ({ setGirisYapildi }) => {
     try {
       await axiosInstance.post('/auth/logout');
     } catch (e) { }
+    localStorage.removeItem('loomix_token');
     setGirisYapildi(false);
     window.location.href = '/#/login';
   };
@@ -152,10 +153,17 @@ const App = () => {
   // Sayfa yenilenince token hala geçerli mi kontrol et
   useEffect(() => {
     const tokenKontrol = async () => {
+      const token = localStorage.getItem('loomix_token');
+      if (!token) {
+        setGirisYapildi(false);
+        setYukleniyor(false);
+        return;
+      }
       try {
         await axiosInstance.get('/stats');
         setGirisYapildi(true);
       } catch (e) {
+        localStorage.removeItem('loomix_token');
         setGirisYapildi(false);
       } finally {
         setYukleniyor(false);
