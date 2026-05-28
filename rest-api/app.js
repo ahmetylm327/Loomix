@@ -8,6 +8,7 @@ const apiRouter = require('./app_api/routers/index');
 
 const app = express();
 
+app.set('trust proxy', 1);
 app.use(helmet());
 
 const izinliDomainler = [
@@ -48,7 +49,6 @@ const genelLimit = rateLimit({
 
 app.use('/api/auth/login', loginLimit);
 app.use('/api', genelLimit);
-
 app.use('/api', apiRouter);
 
 app.use((err, req, res, next) => {
@@ -59,4 +59,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 9000;
 app.listen(PORT, () => {
     console.log(`LOOMIX Sunucusu ${PORT} portunda çalışıyor.`);
+    console.log(`JWT_SECRET yüklendi mi: ${!!process.env.JWT_SECRET}`);
 });
