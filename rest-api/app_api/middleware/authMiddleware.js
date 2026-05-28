@@ -1,8 +1,25 @@
+const jwt = require('jsonwebtoken');
+
 module.exports = (req, res, next) => {
-    console.log("Gelen Cookie:", req.cookies); // Loglara düşüyor mu?
+    try {
+        let token = req.cookies.token;
 
-    // DEBUG: Token kontrolünü geçici olarak devre dışı bırak
-    // if (!req.cookies.token) return res.status(401)... (BU SATIRI GEÇİCİ SİL)
+        if (!token) {
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                token = authHeader.split(' ')[1];
+            }
+        }
 
-    next(); // Herkesi içeri al
+        if (!token) {
+            return res.status(401).json({ mesaj: "Oturum bulunamadı. Lütfen giriş yapın." });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.kullanici = decoded;
+        next();
+
+    } catch (hata) {
+        return res.status(401).json({ mesaj: "Geçersiz veya süresi dolmuş oturum." });
+    }
 };

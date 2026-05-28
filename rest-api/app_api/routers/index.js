@@ -16,7 +16,7 @@ const ctrlPuantaj = require('../controllers/puantajController');
 const ctrlStats = require('../controllers/statsController');
 
 // 🔐 GİRİŞ ROTALARI (Herkese Açık - Koruma yok)
-router.post('/kayit', ctrlAuth.kayitOl);
+//router.post('/kayit', ctrlAuth.kayitOl);
 router.post('/auth/login', ctrlAuth.girisYap);
 router.post('/auth/logout', ctrlAuth.cikisYap); // Çıkış rotasını da ekledik
 
