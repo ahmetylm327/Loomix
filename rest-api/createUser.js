@@ -15,20 +15,15 @@ const kullaniciSema = new mongoose.Schema({
 const Kullanici = mongoose.model('Kullanici', kullaniciSema);
 
 const olustur = async () => {
-    const kullanicilar = [
-        { kullaniciAdi: 'ahmet', sifre: 'SifreniziYazin123', rol: 'admin' },
-    ];
+    // ESKİ KULLANICILARI SİL
+    await Kullanici.deleteMany({});
+    console.log('Eski kullanıcılar silindi.');
 
-    for (const k of kullanicilar) {
-        const varMi = await Kullanici.findOne({ kullaniciAdi: k.kullaniciAdi });
-        if (varMi) {
-            console.log(`${k.kullaniciAdi} zaten var, silip tekrar oluşturuluyor...`);
-            await Kullanici.deleteOne({ kullaniciAdi: k.kullaniciAdi });
-        }
-        const hash = await bcrypt.hash(k.sifre, 10);
-        await Kullanici.create({ kullaniciAdi: k.kullaniciAdi, sifre: hash, rol: k.rol });
-        console.log(`${k.kullaniciAdi} oluşturuldu.`);
-    }
+    const yeniSifre = 'akyıl123'; // ← buraya istediğin şifreyi yaz
+    const hash = await bcrypt.hash(yeniSifre, 10);
+    await Kullanici.create({ kullaniciAdi: 'AKYIL', sifre: hash, rol: 'admin' });
+    console.log(`ahmet / ${yeniSifre} ile oluşturuldu.`);
+
     mongoose.disconnect();
 };
 
