@@ -60,34 +60,61 @@ const getCariEkstre = async (req, res) => {
         const odemeler = await Odeme.find({ ilgiliId: id });
         const uretimler = await Uretim.find({ cariId: id }).populate('productId');
 
+        const cariHesap = await Cari.findById(id);
+        const isTedarikci = cariHesap?.kategori === 'Tedarikçi' || cariHesap?.kategori === 'Toptancı';
+
         let ekstre = [];
 
-        // 1. Üretimler (Firmaya mal verdik -> BİZE OLAN BORÇLARI ARTTI)
-        uretimler.forEach(u => {
-            const tutar = u.quantity * (u.birimFiyat || 0);
-            ekstre.push({
-                key: u._id,
-                tarih: u.productionDate,
-                islemCinsi: "Üretim / Fiş Kesimi",
-                aciklama: `${u.productId?.urunAdi || 'Ürün'} - ${u.quantity} Adet`,
-                borc: tutar, // Firmanın borcuna (bizim alacağımıza) yazılır
-                alacak: 0,
+        // Üretim fişleri — sadece müşteriler için
+        if (!isTedarikci) {
+            uretimler.forEach(u => {
+                const tutar = u.quantity * (u.birimFiyat || 0);
+                ekstre.push({
+                    key: u._id,
+                    tarih: u.productionDate,
+                    islemCinsi: "Üretim / Fiş Kesimi",
+                    aciklama: `${u.productId?.urunAdi || 'Ürün'} - ${u.quantity} Adet`,
+                    borc: tutar,
+                    alacak: 0,
+                });
             });
-        });
+        }
 
-        // 2. Ödemeler (Kasadan yapılan gerçek işlemler)
+        // Ödemeler
         odemeler.forEach(o => {
-            // 🚀 MÜKERRER KAYIT ENGELLEYİCİ: Üretimden kasaya düşen otomatik kopyayı ekstrede gösterme!
             if (o.notlar && o.notlar.includes('Otomatik Mahsup')) return;
 
-            ekstre.push({
-                key: o._id,
-                tarih: o.odemeTarihi,
-                islemCinsi: `Kasa İşlemi (${o.odemeTipi || 'Nakit'})`,
-                aciklama: o.notlar || "Finansal İşlem",
-                alacak: o.islemYonu === 'Gelir' ? o.tutar : 0, // Firma bize para verdi (Borcu düştü)
-                borc: o.islemYonu === 'Gider' ? o.tutar : 0,   // Biz firmaya nakit verdik (Borcu arttı)
-            });
+            if (o.islemYonu === 'MalAlimi') {
+                // Kumaş Tedariği: tedarikçiden mal aldık → aldığımız malzeme sütununa
+                ekstre.push({
+                    key: o._id,
+                    tarih: o.odemeTarihi,
+                    islemCinsi: `Malzeme Tedariği`,
+                    aciklama: o.notlar || "Malzeme Alımı",
+                    borc: 0,
+                    alacak: o.tutar,  // Aldığımız Malzeme sütunu
+                });
+            } else if (isTedarikci) {
+                // Tedarikçiye yapılan normal ödeme → yaptığımız ödeme sütununa
+                ekstre.push({
+                    key: o._id,
+                    tarih: o.odemeTarihi,
+                    islemCinsi: `Kasa İşlemi (${o.odemeTipi || 'Nakit'})`,
+                    aciklama: o.notlar || "Finansal İşlem",
+                    borc: o.islemYonu === 'Gider' ? o.tutar : 0,   // Yaptığımız Ödeme
+                    alacak: o.islemYonu === 'Gelir' ? o.tutar : 0,
+                });
+            } else {
+                // Normal müşteri işlemleri
+                ekstre.push({
+                    key: o._id,
+                    tarih: o.odemeTarihi,
+                    islemCinsi: `Kasa İşlemi (${o.odemeTipi || 'Nakit'})`,
+                    aciklama: o.notlar || "Finansal İşlem",
+                    alacak: o.islemYonu === 'Gelir' ? o.tutar : 0,
+                    borc: o.islemYonu === 'Gider' ? o.tutar : 0,
+                });
+            }
         });
 
         ekstre.sort((a, b) => new Date(a.tarih) - new Date(b.tarih));
@@ -103,8 +130,8 @@ const getCariEkstre = async (req, res) => {
 
         res.json({
             liste: formatliEkstre,
-            toplamBorc: formatliEkstre.reduce((acc, curr) => acc + curr.borc, 0),
-            toplamAlacak: formatliEkstre.reduce((acc, curr) => acc + curr.alacak, 0),
+            toplamBorc: ekstre.reduce((acc, curr) => acc + curr.borc, 0),
+            toplamAlacak: ekstre.reduce((acc, curr) => acc + curr.alacak, 0),
             bakiye: bakiyeAkim
         });
 
