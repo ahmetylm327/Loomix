@@ -55,7 +55,7 @@ exports.girisYap = async (req, res) => {
         res.cookie('token', token, {
             httpOnly: true,         // JavaScript'in token'ı okumasını engeller (XSS koruması)
             secure: true,           // Sadece HTTPS üzerinden gönderilir (Canlıda şart)
-            sameSite: 'lax',       // Cross-origin isteklerinde çerezin gönderilmesini sağlar
+            sameSite: 'none',       // Cross-origin isteklerinde çerezin gönderilmesini sağlar
             path: '/',              // Çerezin tüm API rotalarında geçerli olmasını sağlar
             maxAge: 24 * 60 * 60 * 1000 // 24 saat
         });

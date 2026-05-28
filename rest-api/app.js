@@ -14,7 +14,9 @@ const izinliDomainler = [
     'http://localhost:3000',
     'http://localhost:5173',
     'https://loomix-two.vercel.app',
-    'https://loomix-frontend.vercel.app'
+    'https://loomix-frontend.vercel.app',
+    'https://loomix-chr88t6rz-ahmets-projects-14439cd0.vercel.app',
+    'https://loomix-3r7gs6qca-ahmets-projects-14439cd0.vercel.app'
 ];
 
 app.use(cors({
