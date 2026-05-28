@@ -6,7 +6,6 @@ const axiosInstance = axios.create({
     withCredentials: true
 });
 
-// Her istekte localStorage'daki token'ı header'a ekle
 axiosInstance.interceptors.request.use((config) => {
     const token = localStorage.getItem('loomix_token');
     if (token) {
@@ -15,11 +14,12 @@ axiosInstance.interceptors.request.use((config) => {
     return config;
 });
 
-// 401 alınca login sayfasına yönlendir
 axiosInstance.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        // Login ve logout isteklerinde yönlendirme yapma
+        const url = error.config?.url || '';
+        if (error.response?.status === 401 && !url.includes('/auth/')) {
             localStorage.removeItem('loomix_token');
             window.location.href = '/#/login';
         }
