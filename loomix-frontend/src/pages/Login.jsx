@@ -108,7 +108,6 @@ const Login = ({ setGirisYapildi }) => {
                         <Button type="primary" htmlType="submit" size="large" block style={{ background: 'linear-gradient(90deg, #64ffda 0%, #6c5ce7 100%)', border: 'none', height: '55px', borderRadius: '10px', fontWeight: 'bold', fontSize: '18px', color: '#fff' }}>
                             SİSTEME GİRİŞ <RocketOutlined />
                         </Button>
-                        <Divider style={{ borderColor: 'rgba(100, 255, 218, 0.1)', color: '#a8dadc' }}>VEYA</Divider>
                     </Form>
                 </div>
             </div>

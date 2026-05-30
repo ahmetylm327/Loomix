@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 // --- 1. KAYIT OL (REGISTER) ---
-exports.kayitOl = async (req, res) => {
+/*exports.kayitOl = async (req, res) => {
     try {
         const { kullaniciAdi, sifre, rol } = req.body;
 
@@ -25,7 +25,7 @@ exports.kayitOl = async (req, res) => {
     } catch (hata) {
         res.status(500).json({ mesaj: "Kayıt sırasında hata oluştu: " + hata.message });
     }
-};
+};*/
 
 // --- 2. GİRİŞ YAP (LOGIN) ---
 exports.girisYap = async (req, res) => {
