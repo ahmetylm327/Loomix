@@ -109,9 +109,6 @@ const Login = ({ setGirisYapildi }) => {
                             SİSTEME GİRİŞ <RocketOutlined />
                         </Button>
                         <Divider style={{ borderColor: 'rgba(100, 255, 218, 0.1)', color: '#a8dadc' }}>VEYA</Divider>
-                        <div style={{ textAlign: 'center' }}>
-                            <Link to="/register" style={{ color: '#64ffda', fontWeight: 'bold' }}>Yeni Personel Hesabı Oluştur</Link>
-                        </div>
                     </Form>
                 </div>
             </div>
