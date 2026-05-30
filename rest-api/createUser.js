@@ -15,14 +15,15 @@ const kullaniciSema = new mongoose.Schema({
 const Kullanici = mongoose.model('Kullanici', kullaniciSema);
 
 const olustur = async () => {
-    // ESKİ KULLANICILARI SİL
     await Kullanici.deleteMany({});
     console.log('Eski kullanıcılar silindi.');
 
-    const yeniSifre = 'akyıl123'; // ← buraya istediğin şifreyi yaz
+    const kullaniciAdi = 'AKYIL';     // ← kullanıcı adını buraya yaz
+    const yeniSifre = 'akyıl123';     // ← şifreyi buraya yaz
+
     const hash = await bcrypt.hash(yeniSifre, 10);
-    await Kullanici.create({ kullaniciAdi: 'AKYIL', sifre: hash, rol: 'admin' });
-    console.log(`ahmet / ${yeniSifre} ile oluşturuldu.`);
+    await Kullanici.create({ kullaniciAdi, sifre: hash, rol: 'admin' });
+    console.log(`${kullaniciAdi} / ${yeniSifre} ile oluşturuldu.`);
 
     mongoose.disconnect();
 };
