@@ -19,7 +19,7 @@ const olustur = async () => {
     console.log('Eski kullanıcılar silindi.');
 
     const kullaniciAdi = 'AKYIL';     // ← kullanıcı adını buraya yaz
-    const yeniSifre = 'akyıl123';     // ← şifreyi buraya yaz
+    const yeniSifre = 'akyıl123.';     // ← şifreyi buraya yaz
 
     const hash = await bcrypt.hash(yeniSifre, 10);
     await Kullanici.create({ kullaniciAdi, sifre: hash, rol: 'admin' });
