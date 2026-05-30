@@ -22,7 +22,7 @@ const izinliDomainler = [
 
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin || izinliDomainler.includes(origin)) {
+        if (!origin || origin.endsWith('.vercel.app') || origin.includes('localhost')) {
             callback(null, true);
         } else {
             callback(new Error('CORS: Bu kaynaktan erişim yasak.'));
