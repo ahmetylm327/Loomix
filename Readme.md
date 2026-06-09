@@ -36,6 +36,6 @@ Proje dökümantasyonuna aşağıdaki linklerden erişebilirsiniz:
 2. [REST API Tasarımı](./Ahmet-Yilmaz/Ahmet-Yilmaz-REST-API-Tasarimi.md)
 3. [REST API](./rest-api/)
 4. [Web Front-End](./loomix-frontend/)
-5. [Mobil Front-End](./Ahmet-Yilmaz/Ahmet-Yilmaz-Mobil-Frontend-Gorevleri.md)
-6. [Mobil Back-End](./Ahmet-Yilmaz/Ahmet-Yilmaz-Mobil-Backend-Gorevleri.md)
+5. [Mobil Front-End](https://github.com/ahmetylm327/Loomix/tree/main/mobil-frontend)
+6. [Mobil Back-End](https://github.com/ahmetylm327/Loomix/tree/main/mobil-backend)
 7. [Video Sunum](./Ahmet-Yilmaz/Ahmet-Yilmaz-Sunum.md)
