@@ -1,6 +1,7 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
+    // ☁️ CANLI (CLOUD) BAĞLANTISI - GitHub'a gönderilecek olan ana (main) ayar
     baseURL: 'https://loomix-backend.onrender.com/api',
     headers: { 'Content-Type': 'application/json' },
     withCredentials: true

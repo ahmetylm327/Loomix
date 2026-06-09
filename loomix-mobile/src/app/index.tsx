@@ -28,7 +28,7 @@ export default function LoginScreen() {
 
       // 3. Başarılı mesajı gösterip Personel sayfasına yönlendiriyoruz
       Alert.alert('Başarılı', response.data.mesaj || 'Sisteme giriş yapıldı!', [
-        { text: 'Tamam', onPress: () => router.replace('/personel') }
+        { text: 'Tamam', onPress: () => router.replace('/(drawer)/dashboard') }
       ]);
 
     } catch (error: any) {

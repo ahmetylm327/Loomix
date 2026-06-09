@@ -20,9 +20,11 @@ const izinliDomainler = [
     'https://loomix-3r7gs6qca-ahmets-projects-14439cd0.vercel.app'
 ];
 
+// 🚀 SUNUM İÇİN CORS KİLİDİNİ ESNETTIK
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin || origin.endsWith('.vercel.app') || origin.includes('localhost')) {
+        // Telefon tarayıcıları, mobil uygulamalar veya yerel ağ IP'lerinden gelen isteklere sunum için izin veriyoruz
+        if (!origin || origin.endsWith('.vercel.app') || origin.includes('localhost') || origin.includes('192.168.')) {
             callback(null, true);
         } else {
             callback(new Error('CORS: Bu kaynaktan erişim yasak.'));
@@ -57,7 +59,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 9000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => { // 🚀 '0.0.0.0' ekleyerek dış ağlara tamamen açtık
     console.log(`LOOMIX Sunucusu ${PORT} portunda çalışıyor.`);
     console.log(`JWT_SECRET yüklendi mi: ${!!process.env.JWT_SECRET}`);
 });
