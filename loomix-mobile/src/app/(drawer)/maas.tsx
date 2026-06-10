@@ -44,8 +44,8 @@ export default function MaasScreen() {
             const headers = { Authorization: `Bearer ${token}` };
 
             const [analizRes, arsivRes] = await Promise.all([
-                axios.get('https://loomix-backend.onrender.com/api/mesai/haftalik-analiz', { headers }).catch(() => ({ data: [] })),
-                axios.get('https://loomix-backend.onrender.com/api/mesai/gecmis-odemeler', { headers }).catch(() => ({ data: [] }))
+                axios.get('http://192.168.231.156:5000/api/mesai/haftalik-analiz', { headers }).catch(() => ({ data: [] })),
+                axios.get('http://192.168.231.156:5000/api/mesai/gecmis-odemeler', { headers }).catch(() => ({ data: [] }))
             ]);
 
             const processed = Object.values(analizRes.data.reduce((acc: any, h: any) => {
@@ -89,7 +89,7 @@ export default function MaasScreen() {
                             duzenlenenTutar: safeNumber(v.duzenlenenTutar)
                         }));
 
-                        await axios.post('https://loomix-backend.onrender.com/api/mesai/toplu-odeme', { list, paketIsmi }, {
+                        await axios.post('http://192.168.231.156:5000/api/mesai/toplu-odeme', { list, paketIsmi }, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
 
@@ -113,7 +113,7 @@ export default function MaasScreen() {
                 text: "Evet, Sil", style: "destructive", onPress: async () => {
                     try {
                         const token = await AsyncStorage.getItem('loomix_token');
-                        await axios.delete(`https://loomix-backend.onrender.com/api/mesai/arsiv/${encodeURIComponent(paketAdi)}`, {
+                        await axios.delete(`http://192.168.231.156:5000/api/mesai/arsiv/${encodeURIComponent(paketAdi)}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         fetchData();
@@ -130,7 +130,7 @@ export default function MaasScreen() {
         setModalLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            const res = await axios.get(`https://loomix-backend.onrender.com/api/mesai/arsiv/${encodeURIComponent(paketAdi)}`, {
+            const res = await axios.get(`http://192.168.231.156:5000/api/mesai/arsiv/${encodeURIComponent(paketAdi)}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setSeciliPaketDetaylari(res.data.map((d: any) => ({ ...d, editTutar: Math.abs(d.tutar).toString() })));
@@ -151,7 +151,7 @@ export default function MaasScreen() {
                 buHafta: safeNumber(d.editTutar)
             }));
 
-            await axios.put('https://loomix-backend.onrender.com/api/mesai/arsiv', {
+            await axios.put('http://192.168.231.156:5000/api/mesai/arsiv', {
                 eskiPaketAdi: seciliPaketAdi,
                 yeniListe,
                 yeniPaketAdi: seciliPaketAdi

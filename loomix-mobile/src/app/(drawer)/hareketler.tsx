@@ -25,7 +25,7 @@ export default function CariHareketleriScreen() {
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            const response = await axios.get('https://loomix-backend.onrender.com/api/caris', {
+            const response = await axios.get('http://192.168.231.156:5000/api/caris', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setCariler(response.data);
@@ -42,7 +42,7 @@ export default function CariHareketleriScreen() {
         setEkstreLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            const res = await axios.get(`https://loomix-backend.onrender.com/api/caris/${cari._id}/ekstre`, {
+            const res = await axios.get(`http://192.168.231.156:5000/api/caris/${cari._id}/ekstre`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 

@@ -60,7 +60,7 @@ export default function PuantajScreen() {
     const fetchSettings = async () => {
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            const res = await axios.get('https://loomix-backend.onrender.com/api/attendance/settings', {
+            const res = await axios.get('http://192.168.231.156:5000/api/attendance/settings', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.data) {
@@ -84,7 +84,7 @@ export default function PuantajScreen() {
         setSaveLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            await axios.post('https://loomix-backend.onrender.com/api/attendance/settings', {
+            await axios.post('http://192.168.231.156:5000/api/attendance/settings', {
                 ...settings,
                 tolerans: Number(settings.tolerans)
             }, {
@@ -137,7 +137,7 @@ export default function PuantajScreen() {
                 } as any);
 
                 const token = await AsyncStorage.getItem('loomix_token');
-                const response = await axios.post('https://loomix-backend.onrender.com/api/attendance/upload', formData, {
+                const response = await axios.post('http://192.168.231.156:5000/api/attendance/upload', formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data',
                         Authorization: `Bearer ${token}`

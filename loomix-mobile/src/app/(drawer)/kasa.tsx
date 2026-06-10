@@ -43,10 +43,10 @@ export default function KasaScreen() {
             const headers = { Authorization: `Bearer ${token}` };
 
             const [kasaRes, uretimRes, cariRes, personelRes] = await Promise.all([
-                axios.get('https://loomix-backend.onrender.com/api/payments', { headers }).catch(() => ({ data: [] })),
-                axios.get('https://loomix-backend.onrender.com/api/production', { headers }).catch(() => ({ data: [] })),
-                axios.get('https://loomix-backend.onrender.com/api/caris', { headers }).catch(() => ({ data: [] })),
-                axios.get('https://loomix-backend.onrender.com/api/employees', { headers }).catch(() => ({ data: [] }))
+                axios.get('http://192.168.231.156:5000/api/payments', { headers }).catch(() => ({ data: [] })),
+                axios.get('http://192.168.231.156:5000/api/production', { headers }).catch(() => ({ data: [] })),
+                axios.get('http://192.168.231.156:5000/api/caris', { headers }).catch(() => ({ data: [] })),
+                axios.get('http://192.168.231.156:5000/api/employees', { headers }).catch(() => ({ data: [] }))
             ]);
 
             const tumOdemeler = kasaRes.data || [];
@@ -127,7 +127,7 @@ export default function KasaScreen() {
         setSaveLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            await axios.post('https://loomix-backend.onrender.com/api/payments', {
+            await axios.post('http://192.168.231.156:5000/api/payments', {
                 islemYonu, tutar: cleanTutar, kategori, odemeTipi, relatedId, notlar,
                 odemeTarihi: new Date().toISOString()
             }, {
@@ -156,7 +156,7 @@ export default function KasaScreen() {
                 text: "Evet, Sil", style: "destructive", onPress: async () => {
                     try {
                         const token = await AsyncStorage.getItem('loomix_token');
-                        await axios.delete(`https://loomix-backend.onrender.com/api/payments/${id}`, {
+                        await axios.delete(`http://192.168.231.156:5000/api/payments/${id}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         fetchTumVeriler();

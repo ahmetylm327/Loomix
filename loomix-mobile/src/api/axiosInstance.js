@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-    baseURL: 'https://loomix-backend.onrender.com/api',
+    baseURL: 'http://192.168.231.156:5000/api',
     headers: { 'Content-Type': 'application/json' }
 });
 

@@ -24,7 +24,7 @@ export default function RaporlarScreen() {
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            const response = await axios.post('https://loomix-backend.onrender.com/api/reports/advanced-payroll', {}, {
+            const response = await axios.post('http://192.168.231.156:5000/api/reports/advanced-payroll', {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setData(response.data);
@@ -41,7 +41,7 @@ export default function RaporlarScreen() {
         setEkstreLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            const res = await axios.get(`https://loomix-backend.onrender.com/api/employees/${personel.id}/ekstre`, {
+            const res = await axios.get(`http://192.168.231.156:5000/api/employees/${personel.id}/ekstre`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setEkstreData(res.data);

@@ -32,7 +32,7 @@ function CustomDrawerContent(props: any) {
                     <Text style={styles.subText}>ERP Yönetim Paneli</Text>
                 </View>
 
-                {/* Diğer Sayfaların Listesi (Personel, Finans vb. buraya gelecek) */}
+                {/* Diğer Sayfaların Listesi */}
                 <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: 10 }}>
                     <DrawerItemList {...props} />
                 </View>
@@ -51,20 +51,23 @@ function CustomDrawerContent(props: any) {
 // Menünün Çatısı ve Sayfa Kayıtları
 export default function DrawerLayout() {
     return (
-        <Drawer drawerContent={(props) => <CustomDrawerContent {...props} />} screenOptions={{
-            headerStyle: { backgroundColor: '#0a192f' },
-            headerTintColor: '#64ffda',
-            drawerActiveBackgroundColor: '#e6f7ff',
-            drawerActiveTintColor: '#1890ff',
-            drawerInactiveTintColor: '#333',
-        }}>
+        <Drawer
+            drawerContent={(props) => <CustomDrawerContent {...props} />}
+            screenOptions={{
+                headerStyle: { backgroundColor: '#0a192f' },
+                headerTintColor: '#64ffda',
+                drawerActiveBackgroundColor: '#e6f7ff',
+                drawerActiveTintColor: '#1890ff',
+                drawerInactiveTintColor: '#333',
+                headerTitle: "LOOMIX ERP", // 🚀 SİHİRLİ SATIR: Drawer başlığını buraya sabitledik
+            }}
+        >
             <Drawer.Screen
                 name="dashboard"
                 options={{
                     drawerLabel: '📊 Komuta Merkezi',
                     title: 'Dashboard'
                 }} />
-            {/* 2. Sayfamız: Personel */}
             <Drawer.Screen
                 name="personel"
                 options={{
@@ -135,8 +138,6 @@ export default function DrawerLayout() {
                     title: 'Loomix Yapay Zeka'
                 }}
             />
-            {/* İleride diğer sayfaları buraya ekleyeceğiz (Örn: Finans, Üretim) */}
-
         </Drawer>
     );
 }

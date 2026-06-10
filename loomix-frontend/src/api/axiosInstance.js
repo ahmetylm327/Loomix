@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
-    // ☁️ CANLI (CLOUD) BAĞLANTISI - GitHub'a gönderilecek olan ana (main) ayar
-    baseURL: 'https://loomix-backend.onrender.com/api',
+    // 🚀 SAVAŞ MODU (LOKAL) BAĞLANTISI - Sunum ve Docker için yerel IP
+    baseURL: 'http://192.168.231.156:5000/api',
     headers: { 'Content-Type': 'application/json' },
     withCredentials: true
 });

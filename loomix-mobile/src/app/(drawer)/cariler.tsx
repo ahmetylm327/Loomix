@@ -21,8 +21,8 @@ export default function CarilerScreen() {
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            // ☁️ CANLI (CLOUD) BAĞLANTISI (Cari Listeleme)
-            const response = await axios.get('https://loomix-backend.onrender.com/api/caris', {
+            // ☁️ SAVAŞ MODU (LOKAL) BAĞLANTISI (Cari Listeleme)
+            const response = await axios.get('http://192.168.231.156:5000/api/caris', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setData(response.data);
@@ -45,12 +45,12 @@ export default function CarilerScreen() {
             const headers = { Authorization: `Bearer ${token}` };
 
             if (editingCari) {
-                // ☁️ CANLI (CLOUD) BAĞLANTISI (Cari Güncelleme)
-                await axios.put(`https://loomix-backend.onrender.com/api/caris/${editingCari._id}`, form, { headers });
+                // ☁️ SAVAŞ MODU (LOKAL) BAĞLANTISI (Cari Güncelleme)
+                await axios.put(`http://192.168.231.156:5000/api/caris/${editingCari._id}`, form, { headers });
                 Alert.alert("Başarılı", "Firma bilgileri güncellendi!");
             } else {
-                // ☁️ CANLI (CLOUD) BAĞLANTISI (Cari Ekleme)
-                await axios.post('https://loomix-backend.onrender.com/api/caris', form, { headers });
+                // ☁️ SAVAŞ MODU (LOKAL) BAĞLANTISI (Cari Ekleme)
+                await axios.post('http://192.168.231.156:5000/api/caris', form, { headers });
                 Alert.alert("Başarılı", "Yeni firma kaydedildi!");
             }
 
@@ -72,8 +72,8 @@ export default function CarilerScreen() {
                 text: "Evet, Sil", style: "destructive", onPress: async () => {
                     try {
                         const token = await AsyncStorage.getItem('loomix_token');
-                        // ☁️ CANLI (CLOUD) BAĞLANTISI (Cari Silme)
-                        await axios.delete(`https://loomix-backend.onrender.com/api/caris/${id}`, {
+                        // ☁️ SAVAŞ MODU (LOKAL) BAĞLANTISI (Cari Silme)
+                        await axios.delete(`http://192.168.231.156:5000/api/caris/${id}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         fetchData();

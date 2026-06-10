@@ -21,6 +21,7 @@ export default function UretimScreen() {
     const [birimFiyat, setBirimFiyat] = useState('');
     const [quantity, setQuantity] = useState('');
     const [notes, setNotes] = useState('');
+    const [bulunanUrunAdi, setBulunanUrunAdi] = useState(''); // 🚀 YENİ: Bulunan ürünün adını tutacak state
 
     // 🚀 GÜVENLİK: Virgüllü sayı girişlerini noktaya çeviren yardımcı fonksiyon
     const safeNumber = (val: any) => {
@@ -34,10 +35,11 @@ export default function UretimScreen() {
             const token = await AsyncStorage.getItem('loomix_token');
             const headers = { Authorization: `Bearer ${token}` };
 
+            // ☁️ SAVAŞ MODU BAĞLANTILARI
             const [uretimRes, urunRes, cariRes] = await Promise.all([
-                axios.get('https://loomix-backend.onrender.com/api/production', { headers }),
-                axios.get('https://loomix-backend.onrender.com/api/products', { headers }),
-                axios.get('https://loomix-backend.onrender.com/api/caris', { headers })
+                axios.get('http://192.168.231.156:5000/api/production', { headers }),
+                axios.get('http://192.168.231.156:5000/api/products', { headers }),
+                axios.get('http://192.168.231.156:5000/api/caris', { headers })
             ]);
 
             setUretimler(uretimRes.data);
@@ -60,9 +62,11 @@ export default function UretimScreen() {
         if (bulunanUrun) {
             setProductId(bulunanUrun._id);
             setBirimFiyat(bulunanUrun.birimFiyat ? bulunanUrun.birimFiyat.toString() : '0');
+            setBulunanUrunAdi(bulunanUrun.urunAdi || 'İsimsiz Ürün'); // 🚀 YENİ: Ürün adını state'e atıyoruz
         } else {
             setProductId('');
             setBirimFiyat('');
+            setBulunanUrunAdi(''); // Bulunamadıysa temizle
         }
     };
 
@@ -79,7 +83,7 @@ export default function UretimScreen() {
         setSubmitLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            await axios.post('https://loomix-backend.onrender.com/api/production', {
+            await axios.post('http://192.168.231.156:5000/api/production', {
                 cariId,
                 productId,
                 quantity: cleanQuantity,
@@ -94,7 +98,7 @@ export default function UretimScreen() {
             setIsModalVisible(false);
 
             // Formu Temizle
-            setCariId(''); setProductId(''); setStokKodu(''); setBirimFiyat(''); setQuantity(''); setNotes('');
+            setCariId(''); setProductId(''); setStokKodu(''); setBirimFiyat(''); setQuantity(''); setNotes(''); setBulunanUrunAdi('');
             fetchData();
         } catch (error) {
             Alert.alert("Hata", "Fiş kesilemedi.");
@@ -159,7 +163,7 @@ export default function UretimScreen() {
                 text: "Evet, İptal Et", style: "destructive", onPress: async () => {
                     try {
                         const token = await AsyncStorage.getItem('loomix_token');
-                        await axios.delete(`https://loomix-backend.onrender.com/api/production/${id}`, {
+                        await axios.delete(`http://192.168.231.156:5000/api/production/${id}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         fetchData();
@@ -270,7 +274,8 @@ export default function UretimScreen() {
                             onChangeText={handleStokKoduChange}
                             autoCapitalize="characters"
                         />
-                        {productId ? <Text style={{ color: '#52c41a', marginBottom: 10, marginTop: -10, fontWeight: 'bold' }}>✓ Ürün Bulundu!</Text> : null}
+                        {/* 🚀 YENİ: Ürün adını ekranda gösteriyoruz */}
+                        {productId ? <Text style={{ color: '#52c41a', marginBottom: 10, marginTop: -10, fontWeight: 'bold' }}>✓ Ürün Bulundu: {bulunanUrunAdi}</Text> : null}
 
                         <View style={styles.row}>
                             <View style={{ flex: 1, marginRight: 5 }}>

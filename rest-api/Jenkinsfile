@@ -5,21 +5,20 @@ pipeline {
         stage('Sistemi Temizle') {
             steps {
                 echo 'Varsa eski calisan konteynerler durduruluyor...'
-                sh 'docker-compose down || true'
+                sh 'cd rest-api && docker-compose down || true'
             }
         }
         
         stage('Derleme ve Yayina Alma (Build & Deploy)') {
             steps {
                 echo 'MongoDB, Redis, RabbitMQ ve Loomix Backend Docker uzerinden ayaga kaldiriliyor...'
-                sh 'docker-compose up -d --build'
+                sh 'cd rest-api && docker-compose up -d --build'
             }
         }
         
         stage('Saglik Kontrolu (Health Check)') {
             steps {
                 script {
-                    // Sistemin tamamen ayaga kalkmasi icin 10 saniye bekle
                     sleep 10
                     echo 'Sistem basariyla yayinlandi! Aktif konteynerler:'
                     sh 'docker ps'

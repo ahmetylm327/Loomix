@@ -51,7 +51,7 @@ export default function PersonelScreen() {
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem('loomix_token');
-            const response = await axios.get('https://loomix-backend.onrender.com/api/employees', {
+            const response = await axios.get('http://192.168.231.156:5000/api/employees', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setData(response.data);
@@ -72,10 +72,10 @@ export default function PersonelScreen() {
 
             if (editingEmployee) {
                 const id = editingEmployee.employeeId || editingEmployee._id;
-                await axios.put(`https://loomix-backend.onrender.com/api/employees/${id}`, payload, { headers });
+                await axios.put(`http://192.168.231.156:5000/api/employees/${id}`, payload, { headers });
                 Alert.alert("Başarılı", "Personel güncellendi!");
             } else {
-                await axios.post('https://loomix-backend.onrender.com/api/employees', payload, { headers });
+                await axios.post('http://192.168.231.156:5000/api/employees', payload, { headers });
                 Alert.alert("Başarılı", "Personel eklendi!");
             }
             setIsModalVisible(false);
@@ -91,7 +91,7 @@ export default function PersonelScreen() {
                 text: "Evet, Sil", style: "destructive", onPress: async () => {
                     try {
                         const token = await AsyncStorage.getItem('loomix_token');
-                        await axios.delete(`https://loomix-backend.onrender.com/api/employees/${id}`, {
+                        await axios.delete(`http://192.168.231.156:5000/api/employees/${id}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         fetchData();
@@ -109,7 +109,7 @@ export default function PersonelScreen() {
         try {
             const token = await AsyncStorage.getItem('loomix_token');
             const id = activeActionEmployee.employeeId || activeActionEmployee._id;
-            await axios.post(`https://loomix-backend.onrender.com/api/employees/${id}/pay`, { miktar: cleanAmount }, {
+            await axios.post(`http://192.168.231.156:5000/api/employees/${id}/pay`, { miktar: cleanAmount }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             Alert.alert("Başarılı", `${cleanAmount} ₺ ödeme yapıldı!`);
@@ -126,7 +126,7 @@ export default function PersonelScreen() {
         try {
             const token = await AsyncStorage.getItem('loomix_token');
             const id = activeActionEmployee.employeeId || activeActionEmployee._id;
-            await axios.post(`https://loomix-backend.onrender.com/api/employees/${id}/refund`, { miktar: cleanAmount }, {
+            await axios.post(`http://192.168.231.156:5000/api/employees/${id}/refund`, { miktar: cleanAmount }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             Alert.alert("Başarılı", `${cleanAmount} ₺ tahsil edildi!`);
@@ -143,7 +143,7 @@ export default function PersonelScreen() {
         try {
             const token = await AsyncStorage.getItem('loomix_token');
             const id = activeActionEmployee.employeeId || activeActionEmployee._id;
-            await axios.post(`https://loomix-backend.onrender.com/api/payroll/${id}/calculate`, {
+            await axios.post(`http://192.168.231.156:5000/api/payroll/${id}/calculate`, {
                 period_type: periodType,
                 calisilanGunManuel: cleanGun
             }, {
@@ -163,7 +163,7 @@ export default function PersonelScreen() {
                 text: "Evet, Hepsini Öde", onPress: async () => {
                     try {
                         const token = await AsyncStorage.getItem('loomix_token');
-                        const res = await axios.post('https://loomix-backend.onrender.com/api/employees/bulk-pay', { personelIds: selectedIds }, {
+                        const res = await axios.post('http://192.168.231.156:5000/api/employees/bulk-pay', { personelIds: selectedIds }, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         Alert.alert("Başarılı", `Toplam ${res.data.odenen} ₺ ödendi!`);
@@ -184,7 +184,7 @@ export default function PersonelScreen() {
         try {
             const token = await AsyncStorage.getItem('loomix_token');
             const id = personel.employeeId || personel._id;
-            const res = await axios.get(`https://loomix-backend.onrender.com/api/employees/${id}/ekstre`, {
+            const res = await axios.get(`http://192.168.231.156:5000/api/employees/${id}/ekstre`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setEkstreData(res.data);

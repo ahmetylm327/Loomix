@@ -28,7 +28,7 @@ export default function YapayZekaScreen() {
                 includeSeasonality
             };
 
-            const response = await axios.post('https://loomix-backend.onrender.com/api/estimates/ai-forecast', payload, {
+            const response = await axios.post('http://192.168.231.156:5000/api/estimates/ai-forecast', payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 

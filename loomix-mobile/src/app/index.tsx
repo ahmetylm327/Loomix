@@ -18,7 +18,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       // 1. Senin Render API'ne istek atıyoruz
-      const response = await axios.post('https://loomix-backend.onrender.com/api/auth/login', {
+      const response = await axios.post('http://192.168.231.156:5000/api/auth/login', {
         username: username,
         password: password
       });

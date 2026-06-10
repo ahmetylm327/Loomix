@@ -19,7 +19,7 @@ export default function DashboardScreen() {
             const token = await AsyncStorage.getItem('loomix_token');
             if (!token) return Alert.alert("Hata", "Oturum süresi dolmuş. Lütfen tekrar giriş yapın.");
 
-            const res = await axios.get('https://loomix-backend.onrender.com/api/stats', {
+            const res = await axios.get('http://192.168.231.156:5000/api/stats', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setStats(res.data);

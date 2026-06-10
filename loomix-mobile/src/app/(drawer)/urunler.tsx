@@ -31,12 +31,12 @@ export default function UrunlerScreen() {
             const token = await AsyncStorage.getItem('loomix_token');
             const headers = { Authorization: `Bearer ${token}` };
 
-            // ☁️ CANLI (CLOUD) BAĞLANTISI (Ürünler)
-            const urunlerRes = await axios.get('https://loomix-backend.onrender.com/api/products', { headers });
+            // ☁️ SAVAŞ MODU (LOKAL) BAĞLANTISI (Ürünler)
+            const urunlerRes = await axios.get('http://192.168.231.156:5000/api/products', { headers });
             setData(urunlerRes.data);
 
-            // ☁️ CANLI (CLOUD) BAĞLANTISI (Cariler)
-            const carilerRes = await axios.get('https://loomix-backend.onrender.com/api/caris', { headers });
+            // ☁️ SAVAŞ MODU (LOKAL) BAĞLANTISI (Cariler)
+            const carilerRes = await axios.get('http://192.168.231.156:5000/api/caris', { headers });
             setCariler(carilerRes.data);
         } catch (error) {
             Alert.alert("Hata", "Veri çekme hatası oluştu.");
@@ -102,14 +102,14 @@ export default function UrunlerScreen() {
             };
 
             if (editingId) {
-                // ☁️ CANLI (CLOUD) BAĞLANTISI (Güncelleme)
-                await axios.put(`https://loomix-backend.onrender.com/api/products/${editingId}`, payload, {
+                // ☁️ SAVAŞ MODU (LOKAL) BAĞLANTISI (Güncelleme)
+                await axios.put(`http://192.168.231.156:5000/api/products/${editingId}`, payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 Alert.alert("Başarılı", "Model başarıyla güncellendi!");
             } else {
-                // ☁️ CANLI (CLOUD) BAĞLANTISI (Ekleme)
-                await axios.post('https://loomix-backend.onrender.com/api/products', payload, {
+                // ☁️ SAVAŞ MODU (LOKAL) BAĞLANTISI (Ekleme)
+                await axios.post('http://192.168.231.156:5000/api/products', payload, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 Alert.alert("Başarılı", "Yeni model başarıyla eklendi!");
@@ -133,8 +133,8 @@ export default function UrunlerScreen() {
                 onPress: async () => {
                     try {
                         const token = await AsyncStorage.getItem('loomix_token');
-                        // ☁️ CANLI (CLOUD) BAĞLANTISI (Silme)
-                        await axios.delete(`https://loomix-backend.onrender.com/api/products/${id}`, {
+                        // ☁️ SAVAŞ MODU (LOKAL) BAĞLANTISI (Silme)
+                        await axios.delete(`http://192.168.231.156:5000/api/products/${id}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
                         fetchData();
