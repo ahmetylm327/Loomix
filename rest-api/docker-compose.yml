@@ -3,7 +3,9 @@ services:
     image: mongo:latest
     ports:
       - "27017:27017"
-  
+    volumes:
+      - mongo_data:/data/db # Verilerin Jenkins her çalıştığında silinmemesi için eklendi
+
   redis:
     image: redis:alpine
     ports:
@@ -23,7 +25,11 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/loomixDB
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq
+      - JWT_SECRET=loomix_super_gizli_anahtar_123 # Güvenlik anahtarı hatasını çözen satır
     depends_on:
       - mongodb
       - redis
       - rabbitmq
+
+volumes:
+  mongo_data: # Kalıcı veritabanı alanı
