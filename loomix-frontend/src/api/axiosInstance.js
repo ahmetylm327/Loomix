@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
-    // 🚀 SAVAŞ MODU (LOKAL) BAĞLANTISI - Sunum ve Docker için yerel IP
-    baseURL: 'http://192.168.231.156:5000/api',
+    // 🌍 CANLI (WEB) BAĞLANTISI - Render Sunucusu
+    baseURL: 'https://loomix-backend.onrender.com/api',
     headers: { 'Content-Type': 'application/json' },
     withCredentials: true
 });
@@ -18,7 +18,6 @@ axiosInstance.interceptors.request.use((config) => {
 axiosInstance.interceptors.response.use(
     (response) => response,
     (error) => {
-        // Login ve logout isteklerinde yönlendirme yapma
         const url = error.config?.url || '';
         if (error.response?.status === 401 && !url.includes('/auth/')) {
             localStorage.removeItem('loomix_token');

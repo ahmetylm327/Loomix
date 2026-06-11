@@ -14,9 +14,7 @@ function CustomDrawerContent(props: any) {
                 text: 'Evet, Çıkış Yap',
                 style: 'destructive',
                 onPress: async () => {
-                    // 1. Kasadaki bileti (Token) sil
                     await AsyncStorage.removeItem('loomix_token');
-                    // 2. Kullanıcıyı Login ekranına geri fırlat
                     router.replace('/');
                 }
             }
@@ -59,83 +57,85 @@ export default function DrawerLayout() {
                 drawerActiveBackgroundColor: '#e6f7ff',
                 drawerActiveTintColor: '#1890ff',
                 drawerInactiveTintColor: '#333',
-                headerTitle: "LOOMIX ERP", // 🚀 SİHİRLİ SATIR: Drawer başlığını buraya sabitledik
+                headerTitleAlign: 'center', // Başlığı tam ortaya hizaladık
+                // 🚀 SİHİRLİ DOKUNUŞ: Klasör isminin (drawer) başlığa sızmasını kesin olarak engelledik
+                title: 'LOOMIX ERP',
             }}
         >
             <Drawer.Screen
                 name="dashboard"
                 options={{
                     drawerLabel: '📊 Komuta Merkezi',
-                    title: 'Dashboard'
+                    headerTitle: '📊 LOOMIX ERP' // Üst barda yazacak havalı başlık
                 }} />
             <Drawer.Screen
                 name="personel"
                 options={{
                     drawerLabel: '👥 Personel Yönetimi',
-                    title: 'Personel Listesi'
+                    headerTitle: '👥 Personel Listesi'
                 }}
             />
             <Drawer.Screen
                 name="urunler"
                 options={{
                     drawerLabel: '📦 Stok ve Modeller',
-                    title: 'Ürün Listesi'
+                    headerTitle: '📦 Ürün Listesi'
                 }}
             />
             <Drawer.Screen
                 name="cariler"
                 options={{
                     drawerLabel: '🏢 Cari Hesaplar',
-                    title: 'Cari Listesi'
+                    headerTitle: '🏢 Cari Listesi'
                 }}
             />
             <Drawer.Screen
                 name="uretim"
                 options={{
                     drawerLabel: '🏭 Üretim ve Fişler',
-                    title: 'Üretim Yönetimi'
+                    headerTitle: '🏭 Üretim Yönetimi'
                 }}
             />
             <Drawer.Screen
                 name="puantaj"
                 options={{
                     drawerLabel: '⏱️ Puantaj Yükle',
-                    title: 'Personel Mesai ve Puantaj'
+                    headerTitle: '⏱️ Personel Mesai ve Puantaj'
                 }}
             />
             <Drawer.Screen
                 name="kasa"
                 options={{
                     drawerLabel: '💰 Kasa ve Finans',
-                    title: 'Şirket Finans Defteri'
+                    headerTitle: '💰 Şirket Finans Defteri'
                 }}
             />
             <Drawer.Screen
                 name="maas"
                 options={{
                     drawerLabel: '💸 Maaş ve Bordro',
-                    title: 'Haftalık Maaş Yönetimi'
+                    headerTitle: '💸 Haftalık Maaş Yönetimi'
                 }}
             />
             <Drawer.Screen
                 name="hareketler"
                 options={{
                     drawerLabel: '🔄 Cari Hareketler',
-                    title: 'Müşteri & Tedarikçi Ekstreleri'
+                    headerTitle: '🔄 Müşteri & Tedarikçi Ekstreleri'
                 }}
             />
             <Drawer.Screen
                 name="raporlar"
                 options={{
                     drawerLabel: '📋 Personel Raporları',
-                    title: 'Personel Finansal Mizan'
+                    headerTitle: '📋 Personel Finansal Mizan'
                 }}
             />
             <Drawer.Screen
                 name="yapayzeka"
                 options={{
                     drawerLabel: '🤖 AI Tahmin',
-                    title: 'Loomix Yapay Zeka'
+                    headerTitle: '🤖 Loomix Yapay Zeka'
                 }}
             />
         </Drawer>
