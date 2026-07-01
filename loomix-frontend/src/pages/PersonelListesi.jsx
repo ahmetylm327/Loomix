@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Tag, Card, Typography, message, Button, Modal, Form, Input, Select, InputNumber, Dropdown, Divider, Space, Row, Col, Statistic, Alert } from 'antd';
+import { Table, Tag, Card, Typography, message, Button, Modal, Form, Input, Select, InputNumber, Dropdown, Space, Row, Col, Statistic, Alert } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined, CalculatorOutlined, MoreOutlined, FilePdfOutlined, FileExcelOutlined, FileTextOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, RollbackOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
@@ -55,12 +55,14 @@ const PersonelListesi = () => {
 
     const handleSave = async (values) => {
         try {
+            // 🚀 DÜZELTME: Forma eklenen mikroId (Cihaz ID) bilgisi de backend'e gönderiliyor.
             const backendData = {
                 adSoyad: values.adSoyad,
                 ucretTipi: values.ucretTipi,
                 ucretMiktari: values.ucretMiktari,
                 pozisyon: values.pozisyon,
-                telefon: values.telefon
+                telefon: values.telefon,
+                mikroId: values.mikroId
             };
 
             if (editingEmployee) {
@@ -109,7 +111,8 @@ const PersonelListesi = () => {
             pozisyon: record.pozisyon || record.position,
             ucretTipi: record.ucretTipi || (record.wage_type === 'Hourly' ? 'Saatlik' : 'Günlük'),
             ucretMiktari: record.ucretMiktari || record.daily_wage,
-            telefon: record.telefon || record.phoneNumber
+            telefon: record.telefon || record.phoneNumber,
+            mikroId: record.mikroId // 🚀 Cihaz ID'si de düzenleme ekranına yüklenecek
         });
         setIsModalVisible(true);
     };
@@ -203,7 +206,6 @@ const PersonelListesi = () => {
         }
     };
 
-    // 🚀 MİKRO MANTIĞI: Raporlar sayfasındaki aynı standart eklendi!
     const isBorc = (islemTipi) => islemTipi === 'Ödeme' || islemTipi === 'Avans';
     const isAlacak = (islemTipi) => islemTipi === 'Hakediş' || islemTipi === 'Avans İadesi' || islemTipi === 'Prim';
 
@@ -247,7 +249,6 @@ const PersonelListesi = () => {
         doc.save(`${isim}_Ekstre.pdf`);
     };
 
-    // 🚀 YENİ: Raporlar sayfasındaki detaylı Ekstre tablosunun birebir aynısı!
     const ekstreColumns = [
         { title: 'Tarih', dataIndex: 'islemTarihi', width: 130, render: val => dayjs(val).format('DD.MM.YYYY HH:mm') },
         { title: 'Evrak Cinsi', dataIndex: 'islemTipi', width: 150, render: val => <b>{val === 'Hakediş' ? 'Personel Tahakkuku' : (val === 'Ödeme' ? 'Kasa Tediye Fişi' : val)}</b> },
@@ -264,7 +265,11 @@ const PersonelListesi = () => {
             render: (_, record) => (
                 <div>
                     <b style={{ fontSize: '14px' }}>{record.adSoyad || record.fullname}</b><br />
-                    <span style={{ fontSize: '12px', color: '#8c8c8c' }}>{record.pozisyon || record.position}</span>
+                    <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                        {record.pozisyon || record.position}
+                        {/* 🚀 Ekranda cihaz ID'sini ufacık gösterelim ki kontrolü kolay olsun */}
+                        {record.mikroId && <Tag color="blue" style={{ marginLeft: '8px', fontSize: '10px' }}>Cihaz ID: {record.mikroId}</Tag>}
+                    </span>
                 </div>
             )
         },
@@ -327,7 +332,6 @@ const PersonelListesi = () => {
 
     return (
         <div style={{ padding: '15px', background: '#f0f2f5', minHeight: '100vh' }}>
-
             <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
                 <Col xs={24} sm={8}>
                     <Card style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderLeft: '4px solid #1890ff' }}>
@@ -348,7 +352,6 @@ const PersonelListesi = () => {
             <Card variant="borderless" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)', padding: '5px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: 15 }}>
                     <Title level={4} style={{ margin: 0 }}>Personel Cari & Maliyet Yönetimi</Title>
-
                     <Space>
                         {selectedRowKeys.length > 0 && (
                             <Button type="primary" danger icon={<CheckCircleOutlined />} onClick={handleBulkPayment} style={{ background: '#52c41a', borderColor: '#52c41a' }}>
@@ -378,6 +381,10 @@ const PersonelListesi = () => {
 
             <Modal title={editingEmployee ? "Personel Güncelle" : "Yeni Personel Kaydı"} open={isModalVisible} onCancel={() => setIsModalVisible(false)} onOk={() => form.submit()} okText="Kaydet" cancelText="Vazgeç" destroyOnHidden>
                 <Form form={form} layout="vertical" onFinish={handleSave} style={{ marginTop: 15 }}>
+                    {/* 🚀 YENİ EKLENEN İNPUT: Parmak İzi / Cihaz ID */}
+                    <Form.Item name="mikroId" label="Parmak İzi / Cihaz No (Excel'deki ID)" tooltip="Puantaj Excel'inden okuma yapabilmesi için Excel'deki 'PersonelNo' ile aynı olmalıdır.">
+                        <Input placeholder="Örn: 105" />
+                    </Form.Item>
                     <Form.Item name="adSoyad" label="Ad Soyad" rules={[{ required: true }]}><Input /></Form.Item>
                     <Form.Item name="pozisyon" label="Görev / Pozisyon" rules={[{ required: true }]}><Input /></Form.Item>
                     <Form.Item name="ucretTipi" label="Ücret Hesaplama Tipi" rules={[{ required: true }]}>
@@ -433,7 +440,6 @@ const PersonelListesi = () => {
                 </Form>
             </Modal>
 
-            {/* 🚀 YENİ: Raporlar sayfasındaki Ekstrenin BİREBİR AYNISI */}
             <Modal
                 title={
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: 30 }}>
@@ -472,19 +478,11 @@ const PersonelListesi = () => {
 
                         return (
                             <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold', fontSize: '14px' }}>
-                                <Table.Summary.Cell index={0} colSpan={3} align="right">
-                                    GENEL TOPLAM:
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={1} align="right">
-                                    <Text type="danger">{totalBorc.toLocaleString('tr-TR')} ₺</Text>
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={2} align="right">
-                                    <Text type="success">{totalAlacak.toLocaleString('tr-TR')} ₺</Text>
-                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={0} colSpan={3} align="right">GENEL TOPLAM:</Table.Summary.Cell>
+                                <Table.Summary.Cell index={1} align="right"><Text type="danger">{totalBorc.toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
+                                <Table.Summary.Cell index={2} align="right"><Text type="success">{totalAlacak.toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
                                 <Table.Summary.Cell index={3} align="right">
-                                    <span style={{ color: netBakiye > 0 ? '#cf1322' : (netBakiye < 0 ? '#3f8600' : '#000') }}>
-                                        {netBakiye.toLocaleString('tr-TR')} ₺
-                                    </span>
+                                    <span style={{ color: netBakiye > 0 ? '#cf1322' : (netBakiye < 0 ? '#3f8600' : '#000') }}>{netBakiye.toLocaleString('tr-TR')} ₺</span>
                                 </Table.Summary.Cell>
                             </Table.Summary.Row>
                         );

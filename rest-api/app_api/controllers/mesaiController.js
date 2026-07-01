@@ -7,7 +7,7 @@ const Personel = mongoose.model('Personel');
 const PersonelHareket = mongoose.model('PersonelHareket');
 const Odeme = mongoose.model('Odeme');
 
-// 1. TOPLU TAHAKKUK (EXCEL İLE)
+// 1. TOPLU TAHAKKUK (EXCEL İLE) - YENİ "MIKRO ID" EŞLEŞTİRMESİ
 const mesaiYukle = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ description: "Dosya yüklenemedi!" });
@@ -16,38 +16,53 @@ const mesaiYukle = async (req, res) => {
         const hamVeri = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
         const calismaGunleri = {};
+
+        // 🚀 Excel'den veriyi okurken artık İsim değil, Cihaz ID'sine (PersonelNo) göre grupluyoruz.
         hamVeri.forEach(satir => {
-            const isim = satir['İsim'];
+            const cihazId = satir['Kart No']; // Excel'deki ilgili sütun başlığı (Bunu excel'e göre değiştirebilirsin)
+            const isim = satir['İsim']; // Sadece ekranda log/uyarı göstermek için alıyoruz
             const tarih = satir['GirişTarihi'];
-            if (isim && tarih) {
-                const temizIsim = isim.trim();
-                if (!calismaGunleri[temizIsim]) calismaGunleri[temizIsim] = new Set();
-                calismaGunleri[temizIsim].add(tarih);
+
+            if (cihazId && tarih) {
+                const strCihazId = String(cihazId).trim();
+                if (!calismaGunleri[strCihazId]) {
+                    calismaGunleri[strCihazId] = { isim: isim || "Bilinmiyor", tarihler: new Set() };
+                }
+                calismaGunleri[strCihazId].tarihler.add(tarih);
             }
         });
 
         const sonuclar = { basariliTahakkuklar: [], sistemdeBulunamayanlar: [] };
-        for (const [isim, tarihlerSet] of Object.entries(calismaGunleri)) {
-            const calisilanGunSayisi = tarihlerSet.size;
-            const regex = new RegExp(`^${isim}$`, 'i');
-            const personel = await Personel.findOne({ adSoyad: regex });
+
+        // Veritabanındaki aktif personelleri tek seferde hafızaya al (Performans için)
+        const tumPersoneller = await Personel.find({ aktifMi: true });
+
+        for (const [cihazId, detay] of Object.entries(calismaGunleri)) {
+            const calisilanGunSayisi = detay.tarihler.size;
+
+            // 🚀 EŞLEŞTİRME: Veritabanındaki 'mikroId' ile Excel'deki 'PersonelNo'yu karşılaştır.
+            const personel = tumPersoneller.find(p => p.mikroId && p.mikroId === cihazId);
 
             if (personel) {
                 const yevmiye = personel.ucretMiktari || 0;
                 const toplamHakedis = calisilanGunSayisi * yevmiye;
+
                 personel.bakiye += toplamHakedis;
                 await personel.save();
+
                 await PersonelHareket.create({
                     personelId: personel._id,
                     islemTipi: 'Hakediş',
                     tutar: toplamHakedis,
                     aciklama: `Otomatik Puantaj: ${calisilanGunSayisi} Gün`
                 });
+
                 sonuclar.basariliTahakkuklar.push({ isim: personel.adSoyad, tahakkukTutar: toplamHakedis });
             } else {
-                sonuclar.sistemdeBulunamayanlar.push({ isim: isim, gun: calisilanGunSayisi });
+                sonuclar.sistemdeBulunamayanlar.push({ isim: detay.isim, id: cihazId, gun: calisilanGunSayisi });
             }
         }
+
         fs.unlinkSync(req.file.path);
         res.status(200).json({ mesaj: "Puantaj işlendi.", ozet: sonuclar });
     } catch (hata) {
@@ -102,11 +117,9 @@ const topluOdemeYap = async (req, res) => {
         for (const item of list) {
             if (!item.pId || item.duzenlenenTutar <= 0) continue;
 
-            // 1. Önce personelin güncel durumunu veritabanından çek
             const personel = await Personel.findById(item.pId);
             const fark = item.duzenlenenTutar - item.buHafta;
 
-            // 2. PersonelHareket kayıtlarını at (Bakiye kısmını kodla değil, MongoDB ile yönet)
             if (Math.abs(fark) > 0.01) {
                 await PersonelHareket.create({
                     personelId: item.pId,
@@ -123,13 +136,10 @@ const topluOdemeYap = async (req, res) => {
                 aciklama: paketIsmi
             });
 
-            // 3. EN ÖNEMLİ KISIM: Bakiyeyi manuel set etme, 'inc' ile farkı ekle
-            // Bu sayede bakiye her zaman güncel kalır, üzerine yanlış değer yazılmaz.
             await Personel.findByIdAndUpdate(item.pId, {
                 $inc: { bakiye: (fark - item.duzenlenenTutar) }
             });
 
-            // 4. Kasa kaydı
             await Odeme.create({
                 islemYonu: 'Gider',
                 odemeTipi: 'Nakit/Banka',
