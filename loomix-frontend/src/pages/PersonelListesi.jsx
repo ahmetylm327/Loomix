@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Tag, Card, Typography, message, Button, Modal, Form, Input, Select, InputNumber, Dropdown, Space, Row, Col, Statistic, Alert } from 'antd';
+import { Table, Tag, Card, Typography, message, Button, Modal, Form, Input, Select, InputNumber, Dropdown, Space, Row, Col, Statistic, Alert, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined, CalculatorOutlined, MoreOutlined, FilePdfOutlined, FileExcelOutlined, FileTextOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, RollbackOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
@@ -55,7 +55,6 @@ const PersonelListesi = () => {
 
     const handleSave = async (values) => {
         try {
-            // 🚀 DÜZELTME: Forma eklenen mikroId (Cihaz ID) bilgisi de backend'e gönderiliyor.
             const backendData = {
                 adSoyad: values.adSoyad,
                 ucretTipi: values.ucretTipi,
@@ -112,7 +111,7 @@ const PersonelListesi = () => {
             ucretTipi: record.ucretTipi || (record.wage_type === 'Hourly' ? 'Saatlik' : 'Günlük'),
             ucretMiktari: record.ucretMiktari || record.daily_wage,
             telefon: record.telefon || record.phoneNumber,
-            mikroId: record.mikroId // 🚀 Cihaz ID'si de düzenleme ekranına yüklenecek
+            mikroId: record.mikroId
         });
         setIsModalVisible(true);
     };
@@ -206,6 +205,21 @@ const PersonelListesi = () => {
         }
     };
 
+    // 🚀 YENİ EKLENEN: EKSTREDEN KAYIT SİLME FONKSİYONU
+    const handleEkstreSil = async (hareketId, islemTipi) => {
+        try {
+            const id = ekstrePersonel.employeeId || ekstrePersonel._id;
+            await axiosInstance.delete(`/employees/${id}/ekstre/${hareketId}`);
+            message.success(`Kayıt silindi ve bakiye düzeltildi!`);
+
+            // Ekstreyi ve arka plandaki ana tabloyu aynı anda yenile
+            fetchEkstre(ekstrePersonel);
+            fetchData();
+        } catch (error) {
+            message.error("Kayıt silinemedi!");
+        }
+    };
+
     const isBorc = (islemTipi) => islemTipi === 'Ödeme' || islemTipi === 'Avans';
     const isAlacak = (islemTipi) => islemTipi === 'Hakediş' || islemTipi === 'Avans İadesi' || islemTipi === 'Prim';
 
@@ -256,6 +270,24 @@ const PersonelListesi = () => {
         { title: 'TL Borç (Ödenen)', dataIndex: 'tutar', align: 'right', width: 120, render: (val, record) => isBorc(record.islemTipi) ? <Text type="danger">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
         { title: 'TL Alacak (Hakediş)', dataIndex: 'tutar', align: 'right', width: 120, render: (val, record) => isAlacak(record.islemTipi) ? <Text type="success">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
         { title: 'Yürüyen Bakiye', dataIndex: 'bakiyeSonrasi', align: 'right', width: 120, render: val => <b style={{ color: val < 0 ? '#3f8600' : (val > 0 ? '#cf1322' : '#000') }}>{Number(val || 0).toLocaleString('tr-TR')} ₺</b> },
+        // 🚀 YENİ EKLENEN: SİLME BUTONU
+        {
+            title: '',
+            key: 'islem',
+            width: 50,
+            align: 'center',
+            render: (_, record) => (
+                <Popconfirm
+                    title="İptal Onayı"
+                    description="Bu hareketi silmek bakiyeyi otomatik güncelleyecektir. Emin misiniz?"
+                    onConfirm={() => handleEkstreSil(record._id, record.islemTipi)}
+                    okText="Evet, Sil"
+                    cancelText="Hayır"
+                >
+                    <Button type="text" danger icon={<DeleteOutlined />} size="small" />
+                </Popconfirm>
+            )
+        }
     ];
 
     const columns = [
@@ -267,7 +299,6 @@ const PersonelListesi = () => {
                     <b style={{ fontSize: '14px' }}>{record.adSoyad || record.fullname}</b><br />
                     <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
                         {record.pozisyon || record.position}
-                        {/* 🚀 Ekranda cihaz ID'sini ufacık gösterelim ki kontrolü kolay olsun */}
                         {record.mikroId && <Tag color="blue" style={{ marginLeft: '8px', fontSize: '10px' }}>Cihaz ID: {record.mikroId}</Tag>}
                     </span>
                 </div>
@@ -381,7 +412,6 @@ const PersonelListesi = () => {
 
             <Modal title={editingEmployee ? "Personel Güncelle" : "Yeni Personel Kaydı"} open={isModalVisible} onCancel={() => setIsModalVisible(false)} onOk={() => form.submit()} okText="Kaydet" cancelText="Vazgeç" destroyOnHidden>
                 <Form form={form} layout="vertical" onFinish={handleSave} style={{ marginTop: 15 }}>
-                    {/* 🚀 YENİ EKLENEN İNPUT: Parmak İzi / Cihaz ID */}
                     <Form.Item name="mikroId" label="Parmak İzi / Cihaz No (Excel'deki ID)" tooltip="Puantaj Excel'inden okuma yapabilmesi için Excel'deki 'PersonelNo' ile aynı olmalıdır.">
                         <Input placeholder="Örn: 105" />
                     </Form.Item>
@@ -481,7 +511,7 @@ const PersonelListesi = () => {
                                 <Table.Summary.Cell index={0} colSpan={3} align="right">GENEL TOPLAM:</Table.Summary.Cell>
                                 <Table.Summary.Cell index={1} align="right"><Text type="danger">{totalBorc.toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
                                 <Table.Summary.Cell index={2} align="right"><Text type="success">{totalAlacak.toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
-                                <Table.Summary.Cell index={3} align="right">
+                                <Table.Summary.Cell index={3} colSpan={2} align="center">
                                     <span style={{ color: netBakiye > 0 ? '#cf1322' : (netBakiye < 0 ? '#3f8600' : '#000') }}>{netBakiye.toLocaleString('tr-TR')} ₺</span>
                                 </Table.Summary.Cell>
                             </Table.Summary.Row>

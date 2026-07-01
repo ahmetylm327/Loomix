@@ -202,4 +202,37 @@ const personelTahsilatYap = async (req, res) => {
     }
 };
 
-module.exports = { personelEkle, personelListele, personelGuncelle, personelSil, personelOdemeYap, topluMaasOde, getPersonelEkstre, personelTahsilatYap };
+const personelHareketSil = async (req, res) => {
+    const { employeeId, hareketId } = req.params;
+
+    try {
+        if (!PersonelHareket) return res.status(500).json({ mesaj: "Hareket tablosu bulunamadı." });
+
+        const hareket = await PersonelHareket.findById(hareketId);
+        if (!hareket) return res.status(404).json({ mesaj: "Kayıt bulunamadı." });
+
+        const personel = await Personel.findById(employeeId);
+        if (!personel) return res.status(404).json({ mesaj: "Personel bulunamadı." });
+
+        const tutar = Math.abs(hareket.tutar);
+
+        // Mantık: Eğer silinen şey bir 'Ödeme' veya 'Avans' ise, personelin bakiyesinden daha önce düşülmüştü. Şimdi GERİ EKLİYORUZ.
+        if (hareket.islemTipi === 'Ödeme' || hareket.islemTipi === 'Avans') {
+            personel.bakiye += tutar;
+        }
+        // Mantık: Eğer silinen şey bir 'Hakediş' veya 'İade' ise, personelin bakiyesine eklenmişti. Şimdi GERİ DÜŞÜYORUZ.
+        else if (hareket.islemTipi === 'Hakediş' || hareket.islemTipi === 'Avans İadesi' || hareket.islemTipi === 'Prim') {
+            personel.bakiye -= tutar;
+        }
+
+        await personel.save();
+        await PersonelHareket.findByIdAndDelete(hareketId);
+
+        res.status(200).json({ mesaj: "Kayıt başarıyla silindi ve bakiye güncellendi.", yeniBakiye: personel.bakiye });
+    } catch (error) {
+        res.status(500).json({ mesaj: "Kayıt silinirken hata oluştu", detay: error.message });
+    }
+};
+
+
+module.exports = { personelEkle, personelListele, personelGuncelle, personelSil, personelOdemeYap, topluMaasOde, getPersonelEkstre, personelTahsilatYap, personelHareketSil };
