@@ -41,6 +41,12 @@ const PersonelListesi = () => {
         fetchData();
     }, []);
 
+    // 🔧 Ortak yardımcı: kayıttan bakiyeyi güvenli şekilde okumak için
+    // (Türkçe/İngilizce alan adı karışıklığını tek yerde topluyoruz)
+    const getBakiye = (record) => (record?.bakiye ?? record?.balance ?? 0);
+    const getAdSoyad = (record) => record?.adSoyad || record?.fullname || '';
+    const getId = (record) => record?.employeeId || record?._id;
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -65,7 +71,7 @@ const PersonelListesi = () => {
             };
 
             if (editingEmployee) {
-                const id = editingEmployee.employeeId || editingEmployee._id;
+                const id = getId(editingEmployee);
                 await axiosInstance.put(`/employees/${id}`, backendData);
                 message.success("Personel güncellendi!");
             } else {
@@ -106,7 +112,7 @@ const PersonelListesi = () => {
     const showEditModal = (record) => {
         setEditingEmployee(record);
         form.setFieldsValue({
-            adSoyad: record.adSoyad || record.fullname,
+            adSoyad: getAdSoyad(record),
             pozisyon: record.pozisyon || record.position,
             ucretTipi: record.ucretTipi || (record.wage_type === 'Hourly' ? 'Saatlik' : 'Günlük'),
             ucretMiktari: record.ucretMiktari || record.daily_wage,
@@ -116,12 +122,22 @@ const PersonelListesi = () => {
         setIsModalVisible(true);
     };
 
+    // ✅ DÜZELTME: ödeme tutarı mevcut bakiyeyi aşarsa kullanıcı uyarılıyor
+    // (backend'de de doğrulama yapılmalı; bu sadece frontend güvenlik katmanı)
     const handlePayment = async () => {
         if (!payAmount || payAmount <= 0) return message.warning("Lütfen geçerli bir tutar girin.");
+
+        const mevcutBakiye = getBakiye(payEmployee);
+        if (mevcutBakiye > 0 && payAmount > mevcutBakiye) {
+            return message.warning(
+                `Ödeme tutarı (${payAmount} ₺), personelin alacağından (${mevcutBakiye} ₺) fazla olamaz.`
+            );
+        }
+
         try {
-            const id = payEmployee.employeeId || payEmployee._id;
+            const id = getId(payEmployee);
             await axiosInstance.post(`/employees/${id}/pay`, { miktar: payAmount });
-            message.success(`${payEmployee.adSoyad || payEmployee.fullname} adlı personele ${payAmount} ₺ ödendi!`);
+            message.success(`${getAdSoyad(payEmployee)} adlı personele ${payAmount} ₺ ödendi!`);
             setIsPayModalVisible(false);
             setPayAmount(0);
             fetchData();
@@ -133,9 +149,9 @@ const PersonelListesi = () => {
     const handleRefund = async () => {
         if (!refundAmount || refundAmount <= 0) return message.warning("Lütfen geçerli bir tutar girin.");
         try {
-            const id = refundEmployee.employeeId || refundEmployee._id;
+            const id = getId(refundEmployee);
             await axiosInstance.post(`/employees/${id}/refund`, { miktar: refundAmount });
-            message.success(`${refundEmployee.adSoyad || refundEmployee.fullname} adlı personelden ${refundAmount} ₺ tahsil edildi!`);
+            message.success(`${getAdSoyad(refundEmployee)} adlı personelden ${refundAmount} ₺ tahsil edildi!`);
             setIsRefundModalVisible(false);
             setRefundAmount(0);
             fetchData();
@@ -147,7 +163,7 @@ const PersonelListesi = () => {
     const handleTahakkukSubmit = async (values) => {
         setTahakkukLoading(true);
         try {
-            const id = selectedPersonel.employeeId || selectedPersonel._id;
+            const id = getId(selectedPersonel);
             await axiosInstance.post(`/payroll/${id}/calculate`, values);
             message.success(`Tahakkuk başarıyla eklendi!`);
             setIsTahakkukModalVisible(false);
@@ -169,17 +185,48 @@ const PersonelListesi = () => {
         });
     };
 
+    // ✅ DÜZELTME: sadece pozitif bakiyeli (şirketin borçlu olduğu) personeller
+    // toplu ödemeye dahil ediliyor. Negatif/sıfır bakiyeli seçimler dışlanıyor
+    // ve kullanıcı bu konuda bilgilendiriliyor.
     const handleBulkPayment = () => {
+        const gecerliPersoneller = data.filter(
+            (d) => selectedRowKeys.includes(getId(d)) && getBakiye(d) > 0
+        );
+        const gecersizSayisi = selectedRowKeys.length - gecerliPersoneller.length;
+
+        if (gecerliPersoneller.length === 0) {
+            return message.warning("Seçili personellerin hiçbirinde ödenecek (pozitif) bakiye yok.");
+        }
+
+        const gecerliIdler = gecerliPersoneller.map(getId);
+        const toplamTutar = gecerliPersoneller.reduce((acc, curr) => acc + getBakiye(curr), 0);
+
         confirm({
-            title: `${selectedRowKeys.length} Personele Toplu Ödeme`,
+            title: `${gecerliPersoneller.length} Personele Toplu Ödeme`,
             icon: <WalletOutlined style={{ color: '#52c41a' }} />,
-            content: 'Seçili personellerin içerideki TÜM bakiyeleri sıfırlanıp "Ödendi" olarak işaretlenecek. Onaylıyor musunuz?',
+            content: (
+                <div>
+                    <p>
+                        Seçili <b>{gecerliPersoneller.length}</b> personelin toplam{' '}
+                        <b>{toplamTutar.toLocaleString('tr-TR')} ₺</b> bakiyesi sıfırlanıp
+                        "Ödendi" olarak işaretlenecek. Onaylıyor musunuz?
+                    </p>
+                    {gecersizSayisi > 0 && (
+                        <Alert
+                            type="warning"
+                            showIcon
+                            message={`${gecersizSayisi} personel, bakiyesi sıfır veya negatif (şirkete borçlu) olduğu için işlem dışında bırakıldı.`}
+                            style={{ marginTop: 8 }}
+                        />
+                    )}
+                </div>
+            ),
             okText: 'Evet, Hepsini Öde',
             okType: 'primary',
             cancelText: 'Vazgeç',
             async onOk() {
                 try {
-                    const res = await axiosInstance.post('/employees/bulk-pay', { personelIds: selectedRowKeys });
+                    const res = await axiosInstance.post('/employees/bulk-pay', { personelIds: gecerliIdler });
                     message.success(`Toplam ${res.data.odenen} ₺ başarıyla ödendi!`);
                     setSelectedRowKeys([]);
                     fetchData();
@@ -191,7 +238,7 @@ const PersonelListesi = () => {
     };
 
     const fetchEkstre = async (personel) => {
-        const id = personel.employeeId || personel._id;
+        const id = getId(personel);
         setEkstrePersonel(personel);
         setIsEkstreVisible(true);
         setEkstreLoading(true);
@@ -205,10 +252,9 @@ const PersonelListesi = () => {
         }
     };
 
-    // 🚀 YENİ EKLENEN: EKSTREDEN KAYIT SİLME FONKSİYONU
-    const handleEkstreSil = async (hareketId, islemTipi) => {
+    const handleEkstreSil = async (hareketId) => {
         try {
-            const id = ekstrePersonel.employeeId || ekstrePersonel._id;
+            const id = getId(ekstrePersonel);
             await axiosInstance.delete(`/employees/${id}/ekstre/${hareketId}`);
             message.success(`Kayıt silindi ve bakiye düzeltildi!`);
 
@@ -236,13 +282,13 @@ const PersonelListesi = () => {
         const worksheet = XLSX.utils.json_to_sheet(excelData);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Ekstre");
-        XLSX.writeFile(workbook, `${ekstrePersonel?.adSoyad || ekstrePersonel?.fullname}_Ekstre.xlsx`);
+        XLSX.writeFile(workbook, `${getAdSoyad(ekstrePersonel)}_Ekstre.xlsx`);
     };
 
     const exportToPDF = () => {
         if (!ekstreData || ekstreData.length === 0) return message.warning("Veri yok!");
         const doc = new jsPDF('p', 'pt', 'a4');
-        const isim = ekstrePersonel?.adSoyad || ekstrePersonel?.fullname;
+        const isim = getAdSoyad(ekstrePersonel);
 
         doc.setFontSize(14);
         doc.text(`${isim} - Cari Hesap Ekstresi`, 40, 40);
@@ -263,14 +309,16 @@ const PersonelListesi = () => {
         doc.save(`${isim}_Ekstre.pdf`);
     };
 
+    // ✅ DÜZELTME: "TL Borç" ve "TL Alacak" kolonları artık ayrı 'key' değerlerine
+    // sahip (ikisi de dataIndex: 'tutar' kullandığı için aynı otomatik key'e
+    // düşüyorlardı; bu React reconciliation / kolon davranışlarında soruna yol açabilirdi).
     const ekstreColumns = [
-        { title: 'Tarih', dataIndex: 'islemTarihi', width: 130, render: val => dayjs(val).format('DD.MM.YYYY HH:mm') },
-        { title: 'Evrak Cinsi', dataIndex: 'islemTipi', width: 150, render: val => <b>{val === 'Hakediş' ? 'Personel Tahakkuku' : (val === 'Ödeme' ? 'Kasa Tediye Fişi' : val)}</b> },
-        { title: 'Açıklama', dataIndex: 'aciklama' },
-        { title: 'TL Borç (Ödenen)', dataIndex: 'tutar', align: 'right', width: 120, render: (val, record) => isBorc(record.islemTipi) ? <Text type="danger">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
-        { title: 'TL Alacak (Hakediş)', dataIndex: 'tutar', align: 'right', width: 120, render: (val, record) => isAlacak(record.islemTipi) ? <Text type="success">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
-        { title: 'Yürüyen Bakiye', dataIndex: 'bakiyeSonrasi', align: 'right', width: 120, render: val => <b style={{ color: val < 0 ? '#3f8600' : (val > 0 ? '#cf1322' : '#000') }}>{Number(val || 0).toLocaleString('tr-TR')} ₺</b> },
-        // 🚀 YENİ EKLENEN: SİLME BUTONU
+        { title: 'Tarih', key: 'tarih', dataIndex: 'islemTarihi', width: 130, render: val => dayjs(val).format('DD.MM.YYYY HH:mm') },
+        { title: 'Evrak Cinsi', key: 'evrakCinsi', dataIndex: 'islemTipi', width: 150, render: val => <b>{val === 'Hakediş' ? 'Personel Tahakkuku' : (val === 'Ödeme' ? 'Kasa Tediye Fişi' : val)}</b> },
+        { title: 'Açıklama', key: 'aciklama', dataIndex: 'aciklama' },
+        { title: 'TL Borç (Ödenen)', key: 'borc', dataIndex: 'tutar', align: 'right', width: 120, render: (val, record) => isBorc(record.islemTipi) ? <Text type="danger">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
+        { title: 'TL Alacak (Hakediş)', key: 'alacak', dataIndex: 'tutar', align: 'right', width: 120, render: (val, record) => isAlacak(record.islemTipi) ? <Text type="success">{Math.abs(val).toLocaleString('tr-TR')} ₺</Text> : '-' },
+        { title: 'Yürüyen Bakiye', key: 'bakiye', dataIndex: 'bakiyeSonrasi', align: 'right', width: 120, render: val => <b style={{ color: val < 0 ? '#3f8600' : (val > 0 ? '#cf1322' : '#000') }}>{Number(val || 0).toLocaleString('tr-TR')} ₺</b> },
         {
             title: '',
             key: 'islem',
@@ -280,7 +328,7 @@ const PersonelListesi = () => {
                 <Popconfirm
                     title="İptal Onayı"
                     description="Bu hareketi silmek bakiyeyi otomatik güncelleyecektir. Emin misiniz?"
-                    onConfirm={() => handleEkstreSil(record._id, record.islemTipi)}
+                    onConfirm={() => handleEkstreSil(record._id)}
                     okText="Evet, Sil"
                     cancelText="Hayır"
                 >
@@ -296,7 +344,7 @@ const PersonelListesi = () => {
             key: 'personel',
             render: (_, record) => (
                 <div>
-                    <b style={{ fontSize: '14px' }}>{record.adSoyad || record.fullname}</b><br />
+                    <b style={{ fontSize: '14px' }}>{getAdSoyad(record)}</b><br />
                     <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
                         {record.pozisyon || record.position}
                         {record.mikroId && <Tag color="blue" style={{ marginLeft: '8px', fontSize: '10px' }}>Cihaz ID: {record.mikroId}</Tag>}
@@ -308,16 +356,16 @@ const PersonelListesi = () => {
             title: 'Cari Durum (Maliyet & Bakiye)',
             key: 'hesap',
             render: (_, record) => {
-                const bakiye = record.bakiye || record.balance || 0;
+                const bakiye = getBakiye(record);
                 const ucret = record.ucretMiktari || record.daily_wage || 0;
                 const tip = record.ucretTipi || (record.wage_type === 'Hourly' ? 'Saatlik' : 'Günlük');
                 const tipColor = tip === 'Saatlik' ? 'purple' : 'cyan';
 
                 let bakiyeEtiket;
                 if (bakiye > 0) {
-                    bakiyeEtiket = <Tag color="error" style={{ fontSize: '13px', padding: '2px 8px' }}>Bizden Alacaklı: {bakiye} ₺</Tag>;
+                    bakiyeEtiket = <Tag color="error" style={{ fontSize: '13px', padding: '2px 8px' }}>Bizden Alacaklı: {bakiye.toLocaleString('tr-TR')} ₺</Tag>;
                 } else if (bakiye < 0) {
-                    bakiyeEtiket = <Tag color="success" style={{ fontSize: '13px', padding: '2px 8px' }}>Bize Borçlu: {Math.abs(bakiye)} ₺</Tag>;
+                    bakiyeEtiket = <Tag color="success" style={{ fontSize: '13px', padding: '2px 8px' }}>Bize Borçlu: {Math.abs(bakiye).toLocaleString('tr-TR')} ₺</Tag>;
                 } else {
                     bakiyeEtiket = <Tag color="default" style={{ fontSize: '13px', padding: '2px 8px' }}>Bakiye Sıfır</Tag>;
                 }
@@ -327,7 +375,7 @@ const PersonelListesi = () => {
                         {bakiyeEtiket}<br />
                         <span style={{ fontSize: '12px', color: '#595959', marginTop: '4px', display: 'inline-block' }}>
                             <Tag color={tipColor} bordered={false} style={{ fontSize: '10px', padding: '0 4px', marginRight: 4 }}>{tip}</Tag>
-                            {ucret} ₺
+                            {Number(ucret).toLocaleString('tr-TR')} ₺
                         </span>
                     </div>
                 )
@@ -346,7 +394,7 @@ const PersonelListesi = () => {
                     { key: '5', label: 'Hesap Ekstresi', icon: <FileTextOutlined style={{ color: '#fa8c16' }} />, onClick: () => fetchEkstre(record) },
                     { type: 'divider' },
                     { key: '3', label: 'Düzenle', icon: <EditOutlined />, onClick: () => showEditModal(record) },
-                    { key: '4', label: 'Sil', icon: <DeleteOutlined />, danger: true, onClick: () => showDeleteConfirm(record.employeeId || record._id) },
+                    { key: '4', label: 'Sil', icon: <DeleteOutlined />, danger: true, onClick: () => showDeleteConfirm(getId(record)) },
                 ];
                 return (
                     <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight">
@@ -357,7 +405,11 @@ const PersonelListesi = () => {
         }
     ];
 
-    const toplamIceridekiPara = data.filter(d => d.bakiye > 0).reduce((acc, curr) => acc + (curr.bakiye || 0), 0);
+    // ✅ DÜZELTME: artık her kayıt için getBakiye() kullanılıyor, böylece
+    // 'balance' alanı dönen kayıtlar da toplam istatistiğe dahil oluyor.
+    const toplamIceridekiPara = data
+        .filter(d => getBakiye(d) > 0)
+        .reduce((acc, curr) => acc + getBakiye(curr), 0);
     const saatlikCalisanSayisi = data.filter(d => d.ucretTipi === 'Saatlik' || d.wage_type === 'Hourly').length;
     const gunlukCalisanSayisi = data.length - saatlikCalisanSayisi;
 
@@ -403,7 +455,7 @@ const PersonelListesi = () => {
                     rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
                     columns={columns}
                     dataSource={data}
-                    rowKey={(record) => record.employeeId || record._id}
+                    rowKey={(record) => getId(record)}
                     loading={loading}
                     pagination={{ pageSize: 10, size: 'small' }}
                     size="middle"
@@ -431,8 +483,8 @@ const PersonelListesi = () => {
             <Modal title={<><WalletOutlined style={{ color: '#cf1322' }} /> Personele Ödeme Yap</>} open={isPayModalVisible} onCancel={() => setIsPayModalVisible(false)} onOk={handlePayment} okText="Ödemeyi Tamamla" cancelText="Vazgeç" okButtonProps={{ danger: true }} destroyOnHidden>
                 {payEmployee && (
                     <div style={{ textAlign: 'center', padding: '15px 0' }}>
-                        <Title level={4} style={{ marginBottom: 5 }}>{payEmployee.adSoyad || payEmployee.fullname}</Title>
-                        <p style={{ color: '#8c8c8c' }}>İçerideki Alacağı: <b style={{ color: payEmployee.bakiye > 0 ? '#cf1322' : '#52c41a', fontSize: '16px' }}>{payEmployee.bakiye || 0} ₺</b></p>
+                        <Title level={4} style={{ marginBottom: 5 }}>{getAdSoyad(payEmployee)}</Title>
+                        <p style={{ color: '#8c8c8c' }}>İçerideki Alacağı: <b style={{ color: getBakiye(payEmployee) > 0 ? '#cf1322' : '#52c41a', fontSize: '16px' }}>{getBakiye(payEmployee).toLocaleString('tr-TR')} ₺</b></p>
                         <Alert message="DİKKAT: Bu işlem şirketin kasasından para çıkarır." type="error" showIcon style={{ marginBottom: 15, textAlign: 'left' }} />
                         <p style={{ marginBottom: 5 }}>Ödenecek Tutar (₺):</p>
                         <InputNumber style={{ width: '100%', maxWidth: '250px' }} size="large" min={0} value={payAmount} onChange={(value) => setPayAmount(value)} />
@@ -443,8 +495,8 @@ const PersonelListesi = () => {
             <Modal title={<><RollbackOutlined style={{ color: '#52c41a' }} /> Avans İadesi Al / Tahsilat</>} open={isRefundModalVisible} onCancel={() => setIsRefundModalVisible(false)} onOk={handleRefund} okText="Tahsilatı Kaydet" cancelText="Vazgeç" okButtonProps={{ style: { background: '#52c41a', borderColor: '#52c41a' } }} destroyOnHidden>
                 {refundEmployee && (
                     <div style={{ textAlign: 'center', padding: '15px 0' }}>
-                        <Title level={4} style={{ marginBottom: 5 }}>{refundEmployee.adSoyad || refundEmployee.fullname}</Title>
-                        <p style={{ color: '#8c8c8c' }}>Personele Olan Güncel Borcumuz: <b style={{ color: refundEmployee.bakiye > 0 ? '#cf1322' : '#52c41a', fontSize: '16px' }}>{refundEmployee.bakiye || 0} ₺</b></p>
+                        <Title level={4} style={{ marginBottom: 5 }}>{getAdSoyad(refundEmployee)}</Title>
+                        <p style={{ color: '#8c8c8c' }}>Personele Olan Güncel Borcumuz: <b style={{ color: getBakiye(refundEmployee) > 0 ? '#cf1322' : '#52c41a', fontSize: '16px' }}>{getBakiye(refundEmployee).toLocaleString('tr-TR')} ₺</b></p>
                         <Alert message="Bu işlem çalışanın şirkete nakit para getirdiğini varsayar. Kasaya GELİR olarak yansır." type="success" showIcon style={{ marginBottom: 15, textAlign: 'left' }} />
                         <p style={{ marginBottom: 5 }}>Alınan İade Tutarı (₺):</p>
                         <InputNumber style={{ width: '100%', maxWidth: '250px' }} size="large" min={0} value={refundAmount} onChange={(value) => setRefundAmount(value)} />
@@ -452,10 +504,10 @@ const PersonelListesi = () => {
                 )}
             </Modal>
 
-            <Modal title={selectedPersonel ? `${selectedPersonel.adSoyad || selectedPersonel.fullname} - Manuel Tahakkuk` : "Tahakkuk İşlemi"} open={isTahakkukModalVisible} onCancel={() => setIsTahakkukModalVisible(false)} footer={null} destroyOnHidden>
+            <Modal title={selectedPersonel ? `${getAdSoyad(selectedPersonel)} - Manuel Tahakkuk` : "Tahakkuk İşlemi"} open={isTahakkukModalVisible} onCancel={() => setIsTahakkukModalVisible(false)} footer={null} destroyOnHidden>
                 <div style={{ marginBottom: 20, padding: 15, backgroundColor: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 5 }}>
                     <p style={{ margin: 0 }}><b>Kayıtlı {selectedPersonel?.ucretTipi} Ücreti:</b> {selectedPersonel?.ucretMiktari || selectedPersonel?.daily_wage} ₺</p>
-                    <p style={{ margin: 0, color: '#cf1322' }}><b>Mevcut Alacak:</b> {selectedPersonel?.bakiye || selectedPersonel?.balance || 0} ₺</p>
+                    <p style={{ margin: 0, color: '#cf1322' }}><b>Mevcut Alacak:</b> {getBakiye(selectedPersonel).toLocaleString('tr-TR')} ₺</p>
                 </div>
                 <Form form={tahakkukForm} layout="vertical" onFinish={handleTahakkukSubmit}>
                     <Alert message="Puantaj sistemini kullanmanız önerilir. Bu ekran sadece manuel düzeltmeler içindir." type="info" showIcon style={{ marginBottom: 15 }} />
@@ -473,7 +525,7 @@ const PersonelListesi = () => {
             <Modal
                 title={
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: 30 }}>
-                        <span>{ekstrePersonel?.adSoyad || ekstrePersonel?.fullname} - Detaylı Hesap Ekstresi</span>
+                        <span>{getAdSoyad(ekstrePersonel)} - Detaylı Hesap Ekstresi</span>
                         <Space>
                             <Button size="small" icon={<FileExcelOutlined />} style={{ color: '#52c41a', borderColor: '#52c41a' }} onClick={exportToExcel}>Excel</Button>
                             <Button size="small" type="primary" danger icon={<FilePdfOutlined />} onClick={exportToPDF}>PDF</Button>
@@ -506,12 +558,14 @@ const PersonelListesi = () => {
 
                         const netBakiye = totalAlacak - totalBorc;
 
+                        // ✅ DÜZELTME: Table.Summary.Cell index'leri, önceki hücrelerin
+                        // colSpan'ı hesaba katılarak yeniden hesaplandı (0, colSpan=3 -> 3, 4, 5).
                         return (
                             <Table.Summary.Row style={{ background: '#fafafa', fontWeight: 'bold', fontSize: '14px' }}>
                                 <Table.Summary.Cell index={0} colSpan={3} align="right">GENEL TOPLAM:</Table.Summary.Cell>
-                                <Table.Summary.Cell index={1} align="right"><Text type="danger">{totalBorc.toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
-                                <Table.Summary.Cell index={2} align="right"><Text type="success">{totalAlacak.toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
-                                <Table.Summary.Cell index={3} colSpan={2} align="center">
+                                <Table.Summary.Cell index={3} align="right"><Text type="danger">{totalBorc.toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
+                                <Table.Summary.Cell index={4} align="right"><Text type="success">{totalAlacak.toLocaleString('tr-TR')} ₺</Text></Table.Summary.Cell>
+                                <Table.Summary.Cell index={5} colSpan={2} align="center">
                                     <span style={{ color: netBakiye > 0 ? '#cf1322' : (netBakiye < 0 ? '#3f8600' : '#000') }}>{netBakiye.toLocaleString('tr-TR')} ₺</span>
                                 </Table.Summary.Cell>
                             </Table.Summary.Row>
