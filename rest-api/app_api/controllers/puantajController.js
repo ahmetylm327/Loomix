@@ -40,6 +40,7 @@ const timeToMinutes = (timeVal) => {
     return 0;
 };
 
+// Sütun başlıklarını tanımak için kullanılan temizleme (ör: "Kart No" -> "kartno")
 const metinTemizle = (metin) => {
     if (!metin) return '';
     return metin.toString().toLowerCase()
@@ -48,6 +49,33 @@ const metinTemizle = (metin) => {
         .replace(/ö/g, 'o').replace(/ç/g, 'c')
         .replace(/[^a-z0-9]/g, '');
 };
+
+// 🚀 DÜZELTME: İsim KARŞILAŞTIRMASI için ayrı, Türkçe'ye duyarlı bir normalizasyon.
+// metinTemizle() Türkçe harfleri TAMAMEN ASCII'ye çeviriyor (ı/İ -> i), bu da farklı
+// isimleri (İrem/Irem gibi) yanlışlıkla aynı gösterebilir. İsim eşleştirmede bunun yerine
+// toLocaleLowerCase('tr-TR') kullanıyoruz: bu, Türkçe İ/I/ı/i harflerini doğru şekilde
+// küçük harfe çevirir (JS'in varsayılan case-insensitive regex'i bunu YANLIŞ yapıyordu -
+// "YILMAZ" ile "Yılmaz" regex ile eşleşmiyordu, bu da "isim aynı olduğu halde okumuyor"
+// şikayetinin asıl sebebiydi).
+const isimNormallestir = (str) => {
+    if (!str) return '';
+    return str.toString()
+        .trim()
+        .replace(/\s+/g, ' ')          // Excel'den gelen çoklu/fazladan boşlukları temizle
+        .toLocaleLowerCase('tr-TR');
+};
+
+// 🚀 DÜZELTME: Kart No / Personel No / Sicil No gibi cihaz kimliklerini normalize eder.
+// Baştaki sıfırları temizler ("00001" -> "1") ki kullanıcı personel kaydına "1" veya
+// "00001" yazmış olsun, ikisi de eşleşsin.
+const idNormallestir = (val) => {
+    if (val === null || val === undefined) return '';
+    const temiz = val.toString().trim();
+    const sifirsiz = temiz.replace(/^0+/, '');
+    return sifirsiz === '' ? '0' : sifirsiz;
+};
+
+const metinTemizleKisaltmasiz = metinTemizle; // (geriye dönük uyumluluk için isim korunuyor)
 
 const excelTarihCevir = (val) => {
     if (!val) return new Date().toLocaleDateString('tr-TR');
@@ -102,6 +130,38 @@ const puantajYukle = (req, res) => {
                 return res.status(400).json({ mesaj: "Excel dosyasının içi boş veya sadece başlıklar var!" });
             }
 
+            // 🚀 DÜZELTME: Tüm aktif personeli TEK sorguda çekip iki lookup map'i
+            // oluşturuyoruz (mikroId map + normalize edilmiş isim map). Böylece:
+            //  1) N+1 sorgu problemi ortadan kalkıyor (580 satırlık Excel'de artık
+            //     580 ayrı DB sorgusu değil, tek sorgu atılıyor).
+            //  2) mikroId (Kart No) varsa ÖNCE onunla eşleştirme deneniyor - isim
+            //     yazımından bağımsız, en güvenilir yöntem bu.
+            //  3) İsimle eşleştirme artık Türkçe-güvenli normalize fonksiyonuyla yapılıyor.
+            const tumPersoneller = Personel ? await Personel.find({ aktifMi: true }) : [];
+
+            const mikroIdMap = {};
+            const isimMap = {};
+            for (const p of tumPersoneller) {
+                if (p.mikroId) {
+                    const key = idNormallestir(p.mikroId);
+                    if (key) mikroIdMap[key] = p;
+                }
+                const isimKey = isimNormallestir(p.adSoyad);
+                if (isimKey) isimMap[isimKey] = p;
+            }
+
+            const personelBul = (kartNo, adSoyad) => {
+                if (kartNo) {
+                    const key = idNormallestir(kartNo);
+                    if (key && mikroIdMap[key]) return mikroIdMap[key];
+                }
+                if (adSoyad) {
+                    const key = isimNormallestir(adSoyad);
+                    if (key && isimMap[key]) return isimMap[key];
+                }
+                return null;
+            };
+
             let basariliTahakkuklar = [];
             let eksikBasimlar = [];
             let bulunamayanlarMap = {};
@@ -109,13 +169,20 @@ const puantajYukle = (req, res) => {
 
             // 1. AŞAMA: EXCEL'İ OKU VE HESAPLA
             for (let rawSatir of excelVerisiRaw) {
-                let satir = { AdSoyad: null, GirisSaati: null, CikisSaati: null, Tarih: null, Gun: null, Tutar: null };
+                let satir = { AdSoyad: null, KartNo: null, GirisSaati: null, CikisSaati: null, Tarih: null, Gun: null, Tutar: null };
 
                 for (let key in rawSatir) {
                     if (rawSatir[key] === null) continue;
                     let temizKey = metinTemizle(key);
 
-                    if (temizKey.includes('ad') || temizKey.includes('isim') || temizKey.includes('personel')) satir.AdSoyad = rawSatir[key];
+                    // 🚀 DÜZELTME: Kart No / Personel No / Sicil No gibi kimlik sütunları,
+                    // isim sütunu kontrolünden ÖNCE kontrol ediliyor. Eskiden "PersonelNo"
+                    // gibi bir başlık, içinde "personel" geçtiği için yanlışlıkla isim
+                    // sütunu sanılıyordu ve Kart No hiçbir zaman okunmuyordu.
+                    if (temizKey.includes('kartno') || temizKey.includes('personelno') || temizKey.includes('sicilno') || temizKey.includes('mikroid') || temizKey === 'sicil') {
+                        satir.KartNo = rawSatir[key];
+                    }
+                    else if (temizKey.includes('ad') || temizKey.includes('isim') || temizKey.includes('personel')) satir.AdSoyad = rawSatir[key];
                     else if (temizKey.includes('tarih') || temizKey.includes('date')) satir.Tarih = rawSatir[key];
                     else if (temizKey.includes('giris')) satir.GirisSaati = rawSatir[key];
                     else if (temizKey.includes('cikis')) satir.CikisSaati = rawSatir[key];
@@ -123,17 +190,15 @@ const puantajYukle = (req, res) => {
                     else if (temizKey.includes('tutar') || temizKey.includes('hakedis') || temizKey.includes('alacak')) satir.Tutar = rawSatir[key];
                 }
 
-                if (!satir.AdSoyad) continue;
+                if (!satir.AdSoyad && !satir.KartNo) continue;
 
-                const aranacakIsim = satir.AdSoyad.toString().trim();
+                const aranacakIsim = satir.AdSoyad ? satir.AdSoyad.toString().trim() : '';
                 const satirTarihi = excelTarihCevir(satir.Tarih);
                 const buCumartesiMi = isCumartesi(satir.Tarih);
 
-                // İsimde gizli boşluk veya regex hatası olmaması için kaçış ekledik
-                const personel = await Personel.findOne({
-                    adSoyad: { $regex: new RegExp('^' + aranacakIsim.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') },
-                    aktifMi: true
-                });
+                // 🚀 DÜZELTME: regex yerine, önce Kart No sonra normalize edilmiş isim
+                // ile map üzerinden arama yapılıyor.
+                const personel = personelBul(satir.KartNo, aranacakIsim);
 
                 if (personel) {
                     let gunlukHakedis = 0;
@@ -206,7 +271,7 @@ const puantajYukle = (req, res) => {
                         islenenPersoneller[personel._id].tarihler.push(satirTarihi);
                     } else {
                         eksikBasimlar.push({
-                            isim: aranacakIsim,
+                            isim: personel.adSoyad || aranacakIsim,
                             tarih: satirTarihi,
                             giris: satir.GirisSaati || '-',
                             cikis: satir.CikisSaati || '-',
@@ -214,8 +279,14 @@ const puantajYukle = (req, res) => {
                         });
                     }
                 } else {
-                    if (!bulunamayanlarMap[aranacakIsim]) bulunamayanlarMap[aranacakIsim] = { isim: aranacakIsim, basimSayisi: 0 };
-                    bulunamayanlarMap[aranacakIsim].basimSayisi += 1;
+                    // 🚀 DÜZELTME: Eşleşmeyen kayıtlarda hem isim hem varsa Kart No
+                    // gösteriliyor, ki kullanıcı hatanın isimden mi kart no'dan mı
+                    // kaynaklandığını anlayabilsin.
+                    const gosterimAdi = aranacakIsim || `Kart No: ${satir.KartNo}`;
+                    if (!bulunamayanlarMap[gosterimAdi]) {
+                        bulunamayanlarMap[gosterimAdi] = { isim: gosterimAdi, kartNo: satir.KartNo || null, basimSayisi: 0 };
+                    }
+                    bulunamayanlarMap[gosterimAdi].basimSayisi += 1;
                 }
             }
 
