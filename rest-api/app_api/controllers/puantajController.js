@@ -40,6 +40,7 @@ const timeToMinutes = (timeVal) => {
     return 0;
 };
 
+// Sütun başlıklarını tanımak için kullanılan temizleme (ör: "Kart No" -> "kartno")
 const metinTemizle = (metin) => {
     if (!metin) return '';
     return metin.toString().toLowerCase()
@@ -49,14 +50,24 @@ const metinTemizle = (metin) => {
         .replace(/[^a-z0-9]/g, '');
 };
 
+// 🚀 DÜZELTME: İsim KARŞILAŞTIRMASI için ayrı, Türkçe'ye duyarlı bir normalizasyon.
+// metinTemizle() Türkçe harfleri TAMAMEN ASCII'ye çeviriyor (ı/İ -> i), bu da farklı
+// isimleri (İrem/Irem gibi) yanlışlıkla aynı gösterebilir. İsim eşleştirmede bunun yerine
+// toLocaleLowerCase('tr-TR') kullanıyoruz: bu, Türkçe İ/I/ı/i harflerini doğru şekilde
+// küçük harfe çevirir (JS'in varsayılan case-insensitive regex'i bunu YANLIŞ yapıyordu -
+// "YILMAZ" ile "Yılmaz" regex ile eşleşmiyordu, bu da "isim aynı olduğu halde okumuyor"
+// şikayetinin asıl sebebiydi).
 const isimNormallestir = (str) => {
     if (!str) return '';
     return str.toString()
         .trim()
-        .replace(/\s+/g, ' ')
+        .replace(/\s+/g, ' ')          // Excel'den gelen çoklu/fazladan boşlukları temizle
         .toLocaleLowerCase('tr-TR');
 };
 
+// 🚀 DÜZELTME: Kart No / Personel No / Sicil No gibi cihaz kimliklerini normalize eder.
+// Baştaki sıfırları temizler ("00001" -> "1") ki kullanıcı personel kaydına "1" veya
+// "00001" yazmış olsun, ikisi de eşleşsin.
 const idNormallestir = (val) => {
     if (val === null || val === undefined) return '';
     const temiz = val.toString().trim();
@@ -64,7 +75,7 @@ const idNormallestir = (val) => {
     return sifirsiz === '' ? '0' : sifirsiz;
 };
 
-const metinTemizleKisaltmasiz = metinTemizle;
+const metinTemizleKisaltmasiz = metinTemizle; // (geriye dönük uyumluluk için isim korunuyor)
 
 const excelTarihCevir = (val) => {
     if (!val) return new Date().toLocaleDateString('tr-TR');
@@ -119,6 +130,13 @@ const puantajYukle = (req, res) => {
                 return res.status(400).json({ mesaj: "Excel dosyasının içi boş veya sadece başlıklar var!" });
             }
 
+            // 🚀 DÜZELTME: Tüm aktif personeli TEK sorguda çekip iki lookup map'i
+            // oluşturuyoruz (mikroId map + normalize edilmiş isim map). Böylece:
+            //  1) N+1 sorgu problemi ortadan kalkıyor (580 satırlık Excel'de artık
+            //     580 ayrı DB sorgusu değil, tek sorgu atılıyor).
+            //  2) mikroId (Kart No) varsa ÖNCE onunla eşleştirme deneniyor - isim
+            //     yazımından bağımsız, en güvenilir yöntem bu.
+            //  3) İsimle eşleştirme artık Türkçe-güvenli normalize fonksiyonuyla yapılıyor.
             const tumPersoneller = Personel ? await Personel.find({ aktifMi: true }) : [];
 
             const mikroIdMap = {};
@@ -149,6 +167,7 @@ const puantajYukle = (req, res) => {
             let bulunamayanlarMap = {};
             let islenenPersoneller = {};
 
+            // 1. AŞAMA: EXCEL'İ OKU VE HESAPLA
             for (let rawSatir of excelVerisiRaw) {
                 let satir = { AdSoyad: null, KartNo: null, GirisSaati: null, CikisSaati: null, Tarih: null, Gun: null, Tutar: null };
 
@@ -156,10 +175,21 @@ const puantajYukle = (req, res) => {
                     if (rawSatir[key] === null) continue;
                     let temizKey = metinTemizle(key);
 
-                    if (temizKey.includes('kartno') || temizKey.includes('personelno') || temizKey.includes('sicilno') || temizKey.includes('mikroid') || temizKey === 'sicil') {
+                    // 🚀 DÜZELTME (regresyon giderildi): Kimlik sütunu olarak SADECE
+                    // "Kart No", "Personel No" ve "Mikro ID" kabul ediliyor.
+                    // "Sicil No" BİLEREK DIŞARIDA BIRAKILDI: bazı puantaj cihazı
+                    // Excel'lerinde (senin dosyanda da doğrulandı) bu alan kişisel
+                    // değil, DEPARTMAN/GRUP kodudur (örn. sadece 4-5 farklı değer,
+                    // onlarca personelde tekrar eder). Bunu kimlik sanmak, aynı
+                    // gruptaki TÜM personelin puantajını tek bir kişiye yazan
+                    // hataya yol açıyordu.
+                    // Ayrıca artık "!satir.KartNo" / "!satir.AdSoyad" koruması var:
+                    // bir alan bir kez set edildikten sonra, aynı satırda sonradan
+                    // gelen ve yanlışlıkla eşleşen başka bir sütun onu EZEMEZ.
+                    if (!satir.KartNo && (temizKey.includes('kartno') || temizKey.includes('personelno') || temizKey.includes('mikroid'))) {
                         satir.KartNo = rawSatir[key];
                     }
-                    else if (temizKey.includes('ad') || temizKey.includes('isim') || temizKey.includes('personel')) satir.AdSoyad = rawSatir[key];
+                    else if (!satir.AdSoyad && (temizKey.includes('ad') || temizKey.includes('isim') || temizKey.includes('personel'))) satir.AdSoyad = rawSatir[key];
                     else if (temizKey.includes('tarih') || temizKey.includes('date')) satir.Tarih = rawSatir[key];
                     else if (temizKey.includes('giris')) satir.GirisSaati = rawSatir[key];
                     else if (temizKey.includes('cikis')) satir.CikisSaati = rawSatir[key];
@@ -173,6 +203,8 @@ const puantajYukle = (req, res) => {
                 const satirTarihi = excelTarihCevir(satir.Tarih);
                 const buCumartesiMi = isCumartesi(satir.Tarih);
 
+                // 🚀 DÜZELTME: regex yerine, önce Kart No sonra normalize edilmiş isim
+                // ile map üzerinden arama yapılıyor.
                 const personel = personelBul(satir.KartNo, aranacakIsim);
 
                 if (personel) {
@@ -254,6 +286,9 @@ const puantajYukle = (req, res) => {
                         });
                     }
                 } else {
+                    // 🚀 DÜZELTME: Eşleşmeyen kayıtlarda hem isim hem varsa Kart No
+                    // gösteriliyor, ki kullanıcı hatanın isimden mi kart no'dan mı
+                    // kaynaklandığını anlayabilsin.
                     const gosterimAdi = aranacakIsim || `Kart No: ${satir.KartNo}`;
                     if (!bulunamayanlarMap[gosterimAdi]) {
                         bulunamayanlarMap[gosterimAdi] = { isim: gosterimAdi, kartNo: satir.KartNo || null, basimSayisi: 0 };
@@ -262,6 +297,7 @@ const puantajYukle = (req, res) => {
                 }
             }
 
+            // 2. AŞAMA: MÜKERRER KONTROLÜ VE VERİTABANINA YAZMA
             let zatenEklenenler = [];
 
             for (const pId in islenenPersoneller) {
@@ -279,6 +315,7 @@ const puantajYukle = (req, res) => {
 
                 const beklenenAciklama = `${islemTarihiMetni} Tarihleri Arası: Toplam ${netGun} Günlük Çalışma`;
 
+                // KORUMA KALKANI: Bu işçiye daha önce bu fiş kesilmiş mi?
                 let mukerrerKayit = false;
                 if (PersonelHareket) {
                     const oncekiKayit = await PersonelHareket.findOne({
@@ -294,9 +331,10 @@ const puantajYukle = (req, res) => {
                         isim: p.adSoyad,
                         mesaj: `${islemTarihiMetni} tarihleri ZATEN KAYITLI.`
                     });
-                    continue;
+                    continue; // Çift yazmayı engeller ve sıradakine geçer
                 }
 
+                // EĞER TEMİZSE KAYDET
                 p.bakiye = (p.bakiye || 0) + hakedisNum;
                 await p.save();
 
@@ -319,7 +357,7 @@ const puantajYukle = (req, res) => {
                     basariliTahakkuklar,
                     sistemdeBulunamayanlar: Object.values(bulunamayanlarMap),
                     eksikBasimlar,
-                    zatenEklenenler
+                    zatenEklenenler // Frontend'e bu veriyi yolladık
                 }
             });
 
