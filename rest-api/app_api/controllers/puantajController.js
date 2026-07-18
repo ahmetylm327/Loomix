@@ -40,7 +40,6 @@ const timeToMinutes = (timeVal) => {
     return 0;
 };
 
-// Sütun başlıklarını tanımak için kullanılan temizleme (ör: "Kart No" -> "kartno")
 const metinTemizle = (metin) => {
     if (!metin) return '';
     return metin.toString().toLowerCase()
@@ -265,13 +264,13 @@ const puantajYukle = (req, res) => {
 
             let zatenEklenenler = [];
 
+            // 🚀 KİLİT NOKTA: Bu dosyadaki tüm işlemler aynı saniye (Batch ID) damgasını yiyecek.
+            const topluIslemZamani = new Date();
+
             for (const pId in islenenPersoneller) {
                 const data = islenenPersoneller[pId];
                 const p = data.personel;
                 
-                // 🚀 YENİ EKLENEN YUVARLAMA MANTIĞI:
-                // Kullanıcının talebi: 16995 -> 17000, 16994 -> 16990, 16999.70 -> 17000
-                // Ham küsüratlı hesaplamayı önce alıyoruz, sonra 10'a bölüp yuvarlayıp 10 ile çarpıyoruz.
                 let hamHakedis = Number(data.toplamHakedis || 0);
                 const hakedisNum = Math.round(hamHakedis / 10) * 10;
                 
@@ -313,7 +312,9 @@ const puantajYukle = (req, res) => {
                         islemTipi: 'Hakediş',
                         tutar: hakedisNum,
                         bakiyeSonrasi: p.bakiye,
-                        aciklama: beklenenAciklama
+                        aciklama: beklenenAciklama,
+                        // 🚀 KİLİT NOKTA 2: Ortak saniye damgasını buraya kaydediyoruz
+                        islemTarihi: topluIslemZamani 
                     });
                 }
 
@@ -337,6 +338,56 @@ const puantajYukle = (req, res) => {
     });
 };
 
+// 🚀 YENİ: GEÇMİŞ PUANTAJLARI (HAKEDİŞLERİ) KUSURSUZ ZAMAN DAMGASIYLA GETİR
+const gecmisPuantajlariGetir = async (req, res) => {
+    try {
+        const paketler = await PersonelHareket.aggregate([
+            { $match: { islemTipi: 'Hakediş', aciklama: { $regex: /Tarihleri Arası|Otomatik Puantaj/i } } },
+            { $group: { 
+                // Açıklamaya göre DEĞİL, işlendiği milisaniyeye (Batch ID) göre grupla
+                _id: "$islemTarihi", 
+                toplamTutar: { $sum: { $abs: "$tutar" } }, 
+                kisiSayisi: { $sum: 1 }, 
+                ornekAciklama: { $first: "$aciklama" } 
+            }},
+            { $sort: { _id: -1 } }
+        ]);
+        res.status(200).json(paketler);
+    } catch (e) { 
+        res.status(500).json({ mesaj: "Arşiv alınamadı" }); 
+    }
+};
+
+// 🚀 YENİ: PUANTAJ ARŞİVİNİ ZAMAN DAMGASIYLA SİL VE BAKİYELERİ GERİ AL
+const puantajArsivSil = async (req, res) => {
+    try {
+        const { islemTarihi } = req.body;
+        if(!islemTarihi) return res.status(400).json({ mesaj: "İşlem tarihi belirtilmedi." });
+
+        const hedefTarih = new Date(islemTarihi);
+
+        const hareketler = await PersonelHareket.find({ islemTipi: 'Hakediş', islemTarihi: hedefTarih });
+
+        if(hareketler.length === 0) {
+            return res.status(404).json({ mesaj: "Silinecek kayıt bulunamadı." });
+        }
+
+        // Her bir personelin bakiyesini, eklenen tahakkuk kadar GERİ DÜŞ
+        for (const hareket of hareketler) {
+            await Personel.findByIdAndUpdate(hareket.personelId, {
+                $inc: { bakiye: -hareket.tutar }
+            });
+        }
+
+        // Bakiyeler düştükten sonra hareket kayıtlarını tamamen sil
+        await PersonelHareket.deleteMany({ islemTipi: 'Hakediş', islemTarihi: hedefTarih });
+
+        res.status(200).json({ mesaj: "Puantaj işlemi başarıyla geri alındı ve personellerin bakiyesi düzeltildi." });
+    } catch (e) { 
+        res.status(500).json({ detay: e.message, mesaj: "Silme başarısız." }); 
+    }
+};
+
 const ayarlarıGuncelle = async (req, res) => {
     try {
         await Setting.findOneAndUpdate({ key: 'mesai_ayarlari' }, { value: req.body }, { upsert: true });
@@ -353,58 +404,6 @@ const ayarlarıGetir = async (req, res) => {
     } catch (e) { res.status(500).json({ mesaj: "Ayarlar çekilemedi" }); }
 };
 
-// --------- EKLENECEK KISIM (module.exports'un hemen üstüne) ---------
-
-// 6. GEÇMİŞ PUANTAJLARI (HAKEDİŞLERİ) GRUPLAYARAK GETİR
-const gecmisPuantajlariGetir = async (req, res) => {
-    try {
-        const paketler = await PersonelHareket.aggregate([
-            // Sadece "Hakediş" olanları ve açıklamasında "Tarihleri Arası" veya "Otomatik Puantaj" geçenleri al
-            { $match: { islemTipi: 'Hakediş', aciklama: { $regex: /Tarihleri Arası|Otomatik Puantaj/i } } },
-            { $group: { 
-                _id: "$aciklama", 
-                toplamTutar: { $sum: { $abs: "$tutar" } }, 
-                kisiSayisi: { $sum: 1 }, 
-                tarih: { $first: "$islemTarihi" } 
-            }},
-            { $sort: { tarih: -1 } }
-        ]);
-        res.status(200).json(paketler);
-    } catch (e) { 
-        res.status(500).json({ mesaj: "Arşiv alınamadı" }); 
-    }
-};
-
-// 7. PUANTAJ ARŞİVİNİ SİL VE BAKİYELERİ GERİ AL
-const puantajArsivSil = async (req, res) => {
-    try {
-        const { aciklama } = req.body;
-        if(!aciklama) return res.status(400).json({ mesaj: "Açıklama belirtilmedi." });
-
-        // Önce silinecek hareketleri bul (Hakediş ve spesifik açıklama)
-        const hareketler = await PersonelHareket.find({ islemTipi: 'Hakediş', aciklama: aciklama });
-
-        if(hareketler.length === 0) {
-            return res.status(404).json({ mesaj: "Silinecek kayıt bulunamadı." });
-        }
-
-        // Her bir personelin bakiyesini, eklenen tahakkuk kadar GERİ DÜŞ
-        for (const hareket of hareketler) {
-            await Personel.findByIdAndUpdate(hareket.personelId, {
-                $inc: { bakiye: -hareket.tutar } // Eklenen tutarı çıkarıyoruz
-            });
-        }
-
-        // Bakiyeler düştükten sonra hareket kayıtlarını tamamen sil
-        await PersonelHareket.deleteMany({ islemTipi: 'Hakediş', aciklama: aciklama });
-
-        res.status(200).json({ mesaj: "Puantaj işlemi başarıyla geri alındı ve personellerin bakiyesi düzeltildi." });
-    } catch (e) { 
-        res.status(500).json({ detay: e.message, mesaj: "Silme başarısız." }); 
-    }
-};
-
-// YENİ MODULE.EXPORTS KISMIN (Bununla değiştir)
 module.exports = { 
     puantajYukle, 
     ayarlarıGuncelle, 
@@ -412,4 +411,3 @@ module.exports = {
     gecmisPuantajlariGetir, 
     puantajArsivSil 
 };
-

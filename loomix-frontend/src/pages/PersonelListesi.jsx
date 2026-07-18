@@ -37,7 +37,6 @@ const PersonelListesi = () => {
     const [ekstrePersonel, setEkstrePersonel] = useState(null);
     const [ekstreLoading, setEkstreLoading] = useState(false);
 
-    // YENİ STATE'LER (Geçmiş Puantajlar İçin)
     const [isPuantajArsivVisible, setIsPuantajArsivVisible] = useState(false);
     const [puantajArsivData, setPuantajArsivData] = useState([]);
     const [puantajArsivLoading, setPuantajArsivLoading] = useState(false);
@@ -309,7 +308,6 @@ const PersonelListesi = () => {
         doc.save(`${isim}_Ekstre.pdf`);
     };
 
-    // --- YENİ EKLENEN: GEÇMİŞ PUANTAJLARI YÖNETME ---
     const fetchGecmisPuantajlar = async () => {
         setIsPuantajArsivVisible(true);
         setPuantajArsivLoading(true);
@@ -323,20 +321,22 @@ const PersonelListesi = () => {
         }
     };
 
-    const handleArsivSil = async (aciklama) => {
+    // 🚀 DÜZELTME: SİLME İŞLEMİ ARTIK ZAMAN DAMGASI (islemTarihi) ÜZERİNDEN YAPILIYOR
+    const handleArsivSil = async (islemTarihi) => {
         try {
-            await axiosInstance.post('/attendance/archives/delete', { aciklama });
+            await axiosInstance.post('/attendance/archives/delete', { islemTarihi });
             message.success("Puantaj iptal edildi ve bakiyeler güncellendi!");
-            fetchGecmisPuantajlar(); // Arşiv listesini yenile
-            fetchData(); // Ana sayfadaki bakiyeleri yenile
+            fetchGecmisPuantajlar(); 
+            fetchData(); 
         } catch (error) {
             message.error(error.response?.data?.mesaj || "Silme işlemi başarısız!");
         }
     };
 
     const arsivColumns = [
-        { title: 'Tarih', dataIndex: 'tarih', render: val => dayjs(val).format('DD.MM.YYYY') },
-        { title: 'Excel Açıklaması', dataIndex: '_id', width: 350 },
+        // 🚀 DÜZELTME: Artık Yükleme Zamanını tam saniyesiyle gösteriyoruz
+        { title: 'Yükleme Zamanı', dataIndex: '_id', render: val => dayjs(val).format('DD.MM.YYYY HH:mm:ss') },
+        { title: 'Örnek Açıklama', dataIndex: 'ornekAciklama', width: 350 },
         { title: 'İşlem Gören Kişi', dataIndex: 'kisiSayisi', align: 'center', render: val => <Tag color="blue">{val} Kişi</Tag> },
         { title: 'Toplam Hakediş Tutarı', dataIndex: 'toplamTutar', align: 'right', render: val => <b style={{ color: '#52c41a' }}>{formatMoney(val)} ₺</b> },
         {
@@ -346,7 +346,8 @@ const PersonelListesi = () => {
             render: (_, record) => (
                 <Popconfirm
                     title="Bu puantajı tamamen silmek üzeresiniz."
-                    description="Bu excel ile eklenen TÜM BAKİYELER personellerden GERİ ALINACAKTIR. Emin misiniz?"
+                    description="Bu yükleme ile eklenen TÜM BAKİYELER personellerden GERİ ALINACAKTIR. Emin misiniz?"
+                    // 🚀 DÜZELTME: record._id artık saniye damgası olduğu için onu yolluyoruz
                     onConfirm={() => handleArsivSil(record._id)}
                     okText="Evet, İptal Et"
                     cancelText="Hayır"
@@ -356,7 +357,6 @@ const PersonelListesi = () => {
             )
         }
     ];
-    // ------------------------------------------------
 
     const ekstreColumns = [
         { title: 'Tarih', key: 'tarih', dataIndex: 'islemTarihi', width: 130, render: val => dayjs(val).format('DD.MM.YYYY HH:mm') },
@@ -485,7 +485,6 @@ const PersonelListesi = () => {
                                 {selectedRowKeys.length} Kişiye Öde
                             </Button>
                         )}
-                        {/* 🚀 EKLENEN YENİ BUTON */}
                         <Button type="default" icon={<HistoryOutlined />} onClick={fetchGecmisPuantajlar}>
                             Geçmiş Puantajları Yönet
                         </Button>
@@ -530,7 +529,6 @@ const PersonelListesi = () => {
                 </Form>
             </Modal>
 
-            {/* 🚀 EKLENEN YENİ MODAL (Geçmiş Puantajlar) */}
             <Modal
                 title={<span><HistoryOutlined /> Geçmiş Puantaj Arşivi</span>}
                 open={isPuantajArsivVisible}
