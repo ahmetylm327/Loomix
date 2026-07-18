@@ -269,9 +269,12 @@ const puantajYukle = (req, res) => {
                 const data = islenenPersoneller[pId];
                 const p = data.personel;
                 
-                // 🚀 DÜZELTME: Yuvarlama (Math.round) tamamen kaldırıldı. 
-                // Küsurat kayıplarını önlemek için değer doğrudan ondalıklı olarak kaydediliyor (virgülden sonra 4 haneye kadar)
-                const hakedisNum = Number(Number(data.toplamHakedis || 0).toFixed(4));
+                // 🚀 YENİ EKLENEN YUVARLAMA MANTIĞI:
+                // Kullanıcının talebi: 16995 -> 17000, 16994 -> 16990, 16999.70 -> 17000
+                // Ham küsüratlı hesaplamayı önce alıyoruz, sonra 10'a bölüp yuvarlayıp 10 ile çarpıyoruz.
+                let hamHakedis = Number(data.toplamHakedis || 0);
+                const hakedisNum = Math.round(hamHakedis / 10) * 10;
+                
                 const netGun = Number(data.toplamGun.toFixed(4));
 
                 let islemTarihiMetni = data.tarihler[0];
