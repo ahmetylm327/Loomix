@@ -503,7 +503,7 @@ const PersonelListesi = () => {
                             }}
                         >
                             Bozuk Bakiyeleri Onar
-                        </Button>
+                        </Button> */}
                         <Button type="default" icon={<HistoryOutlined />} onClick={fetchGecmisPuantajlar}>
                             Geçmiş Puantajları Yönet
                         </Button>
@@ -513,7 +513,7 @@ const PersonelListesi = () => {
                             setIsModalVisible(true);
                         }}>
                             Yeni Ekle
-                        </Button> */}
+                        </Button> 
                     </Space>
                 </div>
 
