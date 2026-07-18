@@ -76,7 +76,7 @@ const AppContent = ({ setGirisYapildi }) => {
         { key: '/kasa', icon: <WalletOutlined />, label: <Link to="/kasa">Kasa İşlemleri (Gelir/Gider)</Link> },
       ],
     },
-    { key: '/maas-yonetimi', icon: <TeamOutlined />, label: <Link to="/maas-yonetimi">Maaş Yönetimi (Cuma Analizi)</Link> },
+    { key: '/maas-yonetimi', icon: <TeamOutlined />, label: <Link to="/maas-yonetimi">Maaş Yönetimi</Link> },
     {
       type: 'group',
       label: '4. RAPOR VE ANALİZ',
