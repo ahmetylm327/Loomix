@@ -109,7 +109,9 @@ const haftalikAnalizGetir = async (req, res) => {
     }
 };
 
-// 4. TOPLU ÖDEME (KASA ENTEGRE + TEK KALEM KASA ÇIKIŞI)
+
+
+         // 4. TOPLU ÖDEME (KASA ENTEGRE + TEK KALEM KASA ÇIKIŞI + OTOMATİK GEÇİCİ PERSONEL)
 const topluOdemeYap = async (req, res) => {
     try {
         const { list, paketIsmi } = req.body;
@@ -120,29 +122,50 @@ const topluOdemeYap = async (req, res) => {
         for (const item of list) {
             if (!item.pId || item.duzenlenenTutar <= 0) continue;
 
-            const personel = await Personel.findById(item.pId);
-            const fark = item.duzenlenenTutar - item.buHafta;
+            let gercekPersonelId = item.pId;
 
-            // 1. Manuel hakediş düzenlemesi yapıldıysa Personel ekstresine işle
+            // 🚀 YENİ: Eğer frontend bu kişinin listede olmadığını (yeni eklendiğini) belirtmişse
+            if (item.isNew) {
+                // Önce bu kişiyi arka planda "Geçici" personel olarak sisteme kaydediyoruz
+                const yeniPersonel = new Personel({
+                    adSoyad: item.isim,
+                    kayitDurumu: 'Geçici',
+                    ucretTipi: 'Günlük', // Varsayılan
+                    ucretMiktari: 0,
+                    bakiye: 0
+                });
+                await yeniPersonel.save();
+                
+                // Frontend'in gönderdiği sahte "temp_" id'si yerine, yeni oluşturulan gerçek veritabanı ID'sini atıyoruz
+                gercekPersonelId = yeniPersonel._id; 
+            }
+
+            const personel = await Personel.findById(gercekPersonelId);
+            if (!personel) continue;
+
+            // Yeni eklenen kişilerin "buHafta" (sistem hakedişi) doğal olarak 0'dır. Fark direkt yazdığın tutar olur.
+            const fark = item.duzenlenenTutar - (item.buHafta || 0);
+
+            // 1. Manuel hakediş düzenlemesi yapıldıysa (veya sıfırdan isim girildiyse) Personel ekstresine işle
             if (Math.abs(fark) > 0.01) {
                 await PersonelHareket.create({
-                    personelId: item.pId,
+                    personelId: gercekPersonelId,
                     islemTipi: 'Hakediş',
                     tutar: fark,
-                    aciklama: `Manuel Düzenleme: ${paketIsmi}`
+                    aciklama: item.isNew ? `Manuel Ekleme: ${paketIsmi}` : `Manuel Düzenleme: ${paketIsmi}`
                 });
             }
 
             // 2. Personelin kendi ekstresine ödemeyi düş
             await PersonelHareket.create({
-                personelId: item.pId,
+                personelId: gercekPersonelId,
                 islemTipi: 'Ödeme',
                 tutar: -item.duzenlenenTutar,
                 aciklama: paketIsmi
             });
 
             // 3. Personelin güncel bakiyesini veritabanına kaydet
-            await Personel.findByIdAndUpdate(item.pId, {
+            await Personel.findByIdAndUpdate(gercekPersonelId, {
                 $inc: { bakiye: (fark - item.duzenlenenTutar) }
             });
 
@@ -163,7 +186,7 @@ const topluOdemeYap = async (req, res) => {
             });
         }
 
-        res.status(200).json({ mesaj: "Bakiye ve ödemeler atomik olarak güncellendi. Kasaya tek kalem çıkış yapıldı." });
+        res.status(200).json({ mesaj: "Bakiye ve ödemeler güncellendi. Yeni personeller sisteme dahil edildi." });
     } catch (hata) {
         res.status(500).json({ detay: hata.message });
     }

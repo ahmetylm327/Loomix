@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, message, Button, Typography, Input, InputNumber, Space, Tabs, Modal, Spin } from 'antd';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -27,7 +28,7 @@ const MaasYonetimi = () => {
             const processed = Object.values(res.data.reduce((acc, h) => {
                 if (!h.personelId) return acc;
                 const pId = h.personelId._id;
-                if (!acc[pId]) acc[pId] = { pId, isim: h.personelId.adSoyad, buHafta: 0 };
+                if (!acc[pId]) acc[pId] = { pId, isim: h.personelId.adSoyad, buHafta: 0, isNew: false };
                 // Sadece son 7 günün toplamı
                 if (!dayjs(h.islemTarihi).isBefore(dayjs().subtract(7, 'day'))) {
                     acc[pId].buHafta += h.tutar;
@@ -54,22 +55,46 @@ const MaasYonetimi = () => {
         XLSX.writeFile(wb, `${paketIsmi}.xlsx`, { bookType: 'xlsx', type: 'binary' });
     };
 
+    // 🚀 YENİ: Tabloya boş satır ekleme fonksiyonu
+    const manuelKisiEkle = () => {
+        const yeniKisi = {
+            pId: `temp_${Date.now()}`, // Backend'in bunun yeni biri olduğunu anlaması için geçici ID
+            isim: '',
+            buHafta: 0,
+            duzenlenenTutar: 0,
+            isNew: true // Bu bayrak çok önemli
+        };
+        setVeriler([...veriler, yeniKisi]);
+    };
+
+    // 🚀 YENİ: Eklenen boş satırı silme fonksiyonu
+    const manuelKisiSil = (pId) => {
+        setVeriler(veriler.filter(v => v.pId !== pId));
+    };
+
     const topluOdemeYap = async () => {
         if (arsiv.some(a => a._id === paketIsmi)) {
             message.error("Bu haftayı zaten ödediniz! Lütfen yeni bir paket ismi girin.");
             return;
         }
 
+        // İsim girilmemiş yeni satırları temizle
+        const temizVeriler = veriler.filter(v => !(v.isNew && !v.isim.trim()));
+
+        if (temizVeriler.length === 0) return message.warning("Ödenecek veri yok.");
+
         Modal.confirm({
             title: 'Ödemeleri Onayla',
-            content: `"${paketIsmi}" paketini onaylıyor musun? Manuel yapılan tüm düzenlemeler personel ekstresine işlenecektir.`,
+            content: `"${paketIsmi}" paketini onaylıyor musun? Manuel eklenen kişiler sisteme "Geçici Personel" olarak kaydedilecektir.`,
             onOk: async () => {
                 try {
-                    // Backend'e hem orijinal hesaplanan tutarı (buHafta) hem de senin düzenlediğin tutarı gönderiyoruz
-                    const list = veriler.map(v => ({
+                    // Backend'e isNew bilgisini de gönderiyoruz ki yeni kişileri tanıyıp sisteme eklesin
+                    const list = temizVeriler.map(v => ({
                         pId: v.pId,
+                        isim: v.isim,
                         buHafta: v.buHafta,
-                        duzenlenenTutar: v.duzenlenenTutar
+                        duzenlenenTutar: v.duzenlenenTutar,
+                        isNew: v.isNew
                     }));
 
                     await axiosInstance.post('/mesai/toplu-odeme', { list, paketIsmi });
@@ -107,35 +132,70 @@ const MaasYonetimi = () => {
 
     const toplamTalep = veriler.reduce((acc, curr) => acc + curr.duzenlenenTutar, 0);
 
+    const columns = [
+        { 
+            title: 'Personel', 
+            dataIndex: 'isim',
+            render: (text, record) => {
+                // Eğer yeni eklenen satırsa Input göster
+                if (record.isNew) {
+                    return (
+                        <Input 
+                            placeholder="Personel Adı Girin" 
+                            value={text} 
+                            onChange={(e) => setVeriler(prev => prev.map(i => i.pId === record.pId ? { ...i, isim: e.target.value } : i))} 
+                            style={{ width: '200px' }}
+                        />
+                    );
+                }
+                return <b>{text}</b>;
+            }
+        },
+        {
+            title: 'Bu Hafta Hakediş (Düzenlenebilir)', 
+            dataIndex: 'duzenlenenTutar', 
+            render: (val, r) => (
+                <InputNumber
+                    value={val}
+                    style={{ width: '150px' }}
+                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                    parser={(value) => value?.replace(/\./g, '')}
+                    onChange={(v) => setVeriler(prev => prev.map(i => i.pId === r.pId ? { ...i, duzenlenenTutar: v } : i))}
+                />
+            )
+        },
+        {
+            title: '', // Yeni eklenen satırları iptal etme butonu
+            align: 'center',
+            width: 50,
+            render: (_, record) => record.isNew ? (
+                <Button type="text" danger icon={<DeleteOutlined />} onClick={() => manuelKisiSil(record.pId)} />
+            ) : null
+        }
+    ];
+
     return (
         <Card style={{ margin: 20 }}>
             <Tabs defaultActiveKey="1">
                 <TabPane tab="Bu Haftalık Hakediş" key="1">
                     <Card title="Yeni Ödeme Paketi Hazırla" extra={
                         <Space>
+                            {/* 🚀 YENİ BUTON */}
+                            <Button type="dashed" icon={<PlusOutlined />} onClick={manuelKisiEkle}>
+                                Listede Olmayan Kişi Ekle
+                            </Button>
                             <Button onClick={exportToExcel}>Excel İndir</Button>
                             <Input value={paketIsmi} onChange={e => setPaketIsmi(e.target.value)} style={{ width: 250 }} />
                             <Button type="primary" onClick={topluOdemeYap} disabled={veriler.length === 0}>Öde ve Arşivle</Button>
                         </Space>
                     }>
-                        <Table dataSource={veriler} rowKey="pId" pagination={false} columns={[
-                            { title: 'Personel', dataIndex: 'isim' },
-                            {
-                                title: 'Bu Hafta Hakediş (Düzenlenebilir)', dataIndex: 'duzenlenenTutar', render: (val, r) => (
-                                    <InputNumber
-                                        value={val}
-                                        style={{ width: '150px' }}
-                                        // Yazarken araya nokta koyar (Örn: 17.000)
-                                        formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-                                        // Arka plana temiz sayı olarak gönderir
-                                        parser={(value) => value?.replace(/\./g, '')}
-                                        onChange={(v) => setVeriler(prev => prev.map(i => i.pId === r.pId ? { ...i, duzenlenenTutar: v } : i))}
-                                    />
-                                )
-                            }
-                        ]} summary={() => (
-                            <Table.Summary.Row><Table.Summary.Cell align="right"><Text strong>TOPLAM:</Text></Table.Summary.Cell>
-                                <Table.Summary.Cell><Text strong type="success">{toplamTalep.toLocaleString()} ₺</Text></Table.Summary.Cell></Table.Summary.Row>
+                        <Table dataSource={veriler} rowKey="pId" pagination={false} columns={columns} loading={loading} 
+                            summary={() => (
+                            <Table.Summary.Row>
+                                <Table.Summary.Cell align="right"><Text strong>TOPLAM:</Text></Table.Summary.Cell>
+                                <Table.Summary.Cell><Text strong type="success">{toplamTalep.toLocaleString()} ₺</Text></Table.Summary.Cell>
+                                <Table.Summary.Cell></Table.Summary.Cell>
+                            </Table.Summary.Row>
                         )} />
                     </Card>
                 </TabPane>
