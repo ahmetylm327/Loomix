@@ -100,7 +100,7 @@ const hakedisHesapla = async (req, res) => {
 const haftalikAnalizGetir = async (req, res) => {
     try {
         const tarihSiniri = new Date();
-        tarihSiniri.setDate(tarihSiniri.getDate() - 14);
+        tاريخSiniri.setDate(tarihSiniri.getDate() - 14);
         const hareketler = await PersonelHareket.find({ islemTipi: 'Hakediş', islemTarihi: { $gte: tarihSiniri } }).populate('personelId', 'adSoyad aktifMi');
         const gecerliHareketler = hareketler.filter(h => h.personelId && h.personelId.aktifMi === true);
         res.status(200).json(gecerliHareketler);
@@ -109,9 +109,7 @@ const haftalikAnalizGetir = async (req, res) => {
     }
 };
 
-
-
-         // 4. TOPLU ÖDEME (KASA ENTEGRE + TEK KALEM KASA ÇIKIŞI + OTOMATİK GEÇİCİ PERSONEL)
+// 4. TOPLU ÖDEME (KASA ENTEGRE + TEK KALEM KASA ÇIKIŞI + OTOMATİK GEÇİCİ PERSONEL)
 const topluOdemeYap = async (req, res) => {
     try {
         const { list, paketIsmi } = req.body;
@@ -204,11 +202,48 @@ const gecmisOdemeleriGetir = async (req, res) => {
     } catch (e) { res.status(500).json({ mesaj: "Arşiv alınamadı" }); }
 };
 
+// 🚀 YENİ: Gelişmiş Silme ve Geri Alma (Rollback) Fonksiyonu
 const arsivSil = async (req, res) => {
     try {
-        await PersonelHareket.deleteMany({ islemTipi: 'Ödeme', aciklama: req.params.paketAdi });
-        res.status(200).json({ mesaj: "Arşiv silindi." });
-    } catch (e) { res.status(500).json({ mesaj: "Silme başarısız." }); }
+        const paketAdi = req.params.paketAdi;
+
+        // İptal edilecek paketin ismine bağlı tüm açıklamaları bir dizide tutuyoruz
+        const ilgiliAciklamalar = [
+            paketAdi,
+            `Manuel Düzenleme: ${paketAdi}`,
+            `Manuel Ekleme: ${paketAdi}`
+        ];
+
+        // 1. Bu pakete ait TÜM hareketleri (Ödeme ve varsa manuel Hakedişler) bul
+        const hareketler = await PersonelHareket.find({ aciklama: { $in: ilgiliAciklamalar } });
+
+        // 2. Personel bakiyelerini eski haline getir (Rollback)
+        for (const hareket of hareketler) {
+            if (hareket.islemTipi === 'Ödeme') {
+                // Ödeme iptal ediliyorsa, personelin bakiyesi (alacağı) tekrar artmalı
+                // (Tutar eksi olarak kaydedildiği için Math.abs ile pozitife çevirip ekliyoruz)
+                await Personel.findByIdAndUpdate(hareket.personelId, {
+                    $inc: { bakiye: Math.abs(hareket.tutar) }
+                });
+            } else if (hareket.islemTipi === 'Hakediş') {
+                // Eğer paketle beraber ekstra bir hakediş girildiyse, iptalde bu da düşmeli
+                await Personel.findByIdAndUpdate(hareket.personelId, {
+                    $inc: { bakiye: -Math.abs(hareket.tutar) }
+                });
+            }
+        }
+
+        // 3. Personel Hareketlerini tamamen sil (Personel ekstresi temizlensin)
+        await PersonelHareket.deleteMany({ aciklama: { $in: ilgiliAciklamalar } });
+
+        // 4. Kasa (Odeme) tablosundaki tek kalem çıkışı da bulup sil
+        // Kasa açıklaması "Paket İsmi - Toplu Personel Maaş Ödemesi" formatındaydı.
+        await Odeme.deleteMany({ notlar: { $regex: paketAdi, $options: 'i' }, kategori: 'Personel Maaşları' });
+
+        res.status(200).json({ mesaj: "Maaş paketi başarıyla iptal edildi. Bakiyeler, ekstreler ve kasa eski haline döndü." });
+    } catch (e) { 
+        res.status(500).json({ mesaj: "Silme başarısız.", detay: e.message }); 
+    }
 };
 
 const paketDetayGetir = async (req, res) => {
