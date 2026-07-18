@@ -234,5 +234,45 @@ const personelHareketSil = async (req, res) => {
     }
 };
 
+// 🚀 BOZULMUŞ BAKİYELERİ ONARMA FONKSİYONU
+const bakiyeleriOnar = async (req, res) => {
+    try {
+        const personeller = await Personel.find();
+        let onarilanSayisi = 0;
 
-module.exports = { personelEkle, personelListele, personelGuncelle, personelSil, personelOdemeYap, topluMaasOde, getPersonelEkstre, personelTahsilatYap, personelHareketSil };
+        for (const p of personeller) {
+            // Personelin ekstresindeki GERÇEK hareketleri bul
+            const hareketler = await PersonelHareket.find({ personelId: p._id });
+            let gercekBakiye = 0;
+            
+            for (const h of hareketler) {
+                if (h.islemTipi === 'Hakediş' || h.islemTipi === 'Avans İadesi' || h.islemTipi === 'Prim') {
+                    gercekBakiye += Math.abs(h.tutar);
+                } else if (h.islemTipi === 'Ödeme' || h.islemTipi === 'Avans') {
+                    gercekBakiye -= Math.abs(h.tutar);
+                }
+            }
+
+            // Yuvarlama hatalarını önlemek için 4 haneye sabitle
+            gercekBakiye = Number(gercekBakiye.toFixed(4));
+
+            // Eğer veritabanında asılı kalan bakiye, gerçek ekstre toplamından farklıysa onar
+            if (p.bakiye !== gercekBakiye) {
+                p.bakiye = gercekBakiye;
+                await p.save();
+                onarilanSayisi++;
+            }
+        }
+
+        res.status(200).json({ mesaj: `${onarilanSayisi} personelin bozulan bakiyesi başarıyla onarıldı!` });
+    } catch (error) {
+        res.status(500).json({ mesaj: "Onarım başarısız oldu", detay: error.message });
+    }
+};
+
+// module.exports kısmını bunu da içerecek şekilde güncelle:
+module.exports = { 
+    personelEkle, personelListele, personelGuncelle, personelSil, 
+    personelOdemeYap, topluMaasOde, getPersonelEkstre, 
+    personelTahsilatYap, personelHareketSil, bakiyeleriOnar // <-- bakiyeleriOnar eklendi
+};

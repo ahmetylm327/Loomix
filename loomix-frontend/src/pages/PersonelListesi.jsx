@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Tag, Card, Typography, message, Button, Modal, Form, Input, Select, InputNumber, Dropdown, Space, Row, Col, Statistic, Alert, Popconfirm } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined, CalculatorOutlined, MoreOutlined, FilePdfOutlined, FileExcelOutlined, FileTextOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, RollbackOutlined, HistoryOutlined } from '@ant-design/icons';
+// 🚀 ToolOutlined ikonu import edildi
+import { PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined, CalculatorOutlined, MoreOutlined, FilePdfOutlined, FileExcelOutlined, FileTextOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, RollbackOutlined, HistoryOutlined, ToolOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -485,6 +486,24 @@ const PersonelListesi = () => {
                                 {selectedRowKeys.length} Kişiye Öde
                             </Button>
                         )}
+                        {/* 🚀 YENİ EKLENEN BOZUK BAKİYE ONAR BUTONU */}
+                        <Button 
+                            type="dashed" 
+                            danger 
+                            icon={<ToolOutlined />} 
+                            onClick={async () => {
+                                try {
+                                    message.loading({ content: 'Hesaplar onarılıyor...', key: 'onarim' });
+                                    const res = await axiosInstance.post('/employees/fix-balances');
+                                    message.success({ content: res.data.mesaj, key: 'onarim', duration: 3 });
+                                    fetchData(); // Tabloyu yenile
+                                } catch (e) {
+                                    message.error({ content: "Onarım yapılamadı.", key: 'onarim' });
+                                }
+                            }}
+                        >
+                            Bozuk Bakiyeleri Onar
+                        </Button>
                         <Button type="default" icon={<HistoryOutlined />} onClick={fetchGecmisPuantajlar}>
                             Geçmiş Puantajları Yönet
                         </Button>

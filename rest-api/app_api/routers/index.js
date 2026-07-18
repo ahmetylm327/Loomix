@@ -31,6 +31,8 @@ router.post('/employees/:employeeId/pay', ctrlPersonel.personelOdemeYap);
 router.get('/employees/:employeeId/ekstre', ctrlPersonel.getPersonelEkstre);
 router.delete('/employees/:employeeId/ekstre/:hareketId', ctrlPersonel.personelHareketSil);
 router.post('/employees/:employeeId/refund', ctrlPersonel.personelTahsilatYap);
+// Bunu personel rotalarının olduğu yere yapıştır:
+router.post('/employees/fix-balances', ctrlPersonel.bakiyeleriOnar);
 
 // 🕒 MESAİ VE PUANTAJ ROTALARI
 router.post('/attendance/upload', ctrlPuantaj.puantajYukle);
