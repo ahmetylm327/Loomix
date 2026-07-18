@@ -109,10 +109,13 @@ const haftalikAnalizGetir = async (req, res) => {
     }
 };
 
-// 4. TOPLU ÖDEME (KASA ENTEGRE + ÇİFT ÖDEME KORUMALI)
+// 4. TOPLU ÖDEME (KASA ENTEGRE + TEK KALEM KASA ÇIKIŞI)
 const topluOdemeYap = async (req, res) => {
     try {
         const { list, paketIsmi } = req.body;
+
+        let toplamKasaCikisi = 0;       // Kasadan çıkacak toplam para
+        let islemGorenKisiSayisi = 0;   // Kaç personele işlem yapıldığının sayısı
 
         for (const item of list) {
             if (!item.pId || item.duzenlenenTutar <= 0) continue;
@@ -120,6 +123,7 @@ const topluOdemeYap = async (req, res) => {
             const personel = await Personel.findById(item.pId);
             const fark = item.duzenlenenTutar - item.buHafta;
 
+            // 1. Manuel hakediş düzenlemesi yapıldıysa Personel ekstresine işle
             if (Math.abs(fark) > 0.01) {
                 await PersonelHareket.create({
                     personelId: item.pId,
@@ -129,6 +133,7 @@ const topluOdemeYap = async (req, res) => {
                 });
             }
 
+            // 2. Personelin kendi ekstresine ödemeyi düş
             await PersonelHareket.create({
                 personelId: item.pId,
                 islemTipi: 'Ödeme',
@@ -136,21 +141,29 @@ const topluOdemeYap = async (req, res) => {
                 aciklama: paketIsmi
             });
 
+            // 3. Personelin güncel bakiyesini veritabanına kaydet
             await Personel.findByIdAndUpdate(item.pId, {
                 $inc: { bakiye: (fark - item.duzenlenenTutar) }
             });
 
+            // Kasaya tek kalem yazdırmak için tutarı ve sayıyı havuzda topla
+            toplamKasaCikisi += item.duzenlenenTutar;
+            islemGorenKisiSayisi++;
+        }
+
+        // 4. ANA KASAYA TEK KALEMDE ÇIKIŞ YAP (Döngü bittikten sonra 1 kere çalışır)
+        if (toplamKasaCikisi > 0) {
             await Odeme.create({
                 islemYonu: 'Gider',
                 odemeTipi: 'Nakit/Banka',
-                tutar: item.duzenlenenTutar,
+                tutar: toplamKasaCikisi,
                 kategori: 'Personel Maaşları',
-                ilgiliId: item.pId,
                 odemeTarihi: new Date(),
-                notlar: `${paketIsmi} - Personel Ödemesi`
+                notlar: `${paketIsmi} - Toplu Personel Maaş Ödemesi (${islemGorenKisiSayisi} Kişi)`
             });
         }
-        res.status(200).json({ mesaj: "Bakiye ve ödemeler atomik olarak güncellendi." });
+
+        res.status(200).json({ mesaj: "Bakiye ve ödemeler atomik olarak güncellendi. Kasaya tek kalem çıkış yapıldı." });
     } catch (hata) {
         res.status(500).json({ detay: hata.message });
     }
