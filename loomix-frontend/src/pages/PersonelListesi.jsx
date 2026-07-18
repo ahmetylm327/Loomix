@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Tag, Card, Typography, message, Button, Modal, Form, Input, Select, InputNumber, Dropdown, Space, Row, Col, Statistic, Alert, Popconfirm } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined, CalculatorOutlined, MoreOutlined, FilePdfOutlined, FileExcelOutlined, FileTextOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, RollbackOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, WalletOutlined, CalculatorOutlined, MoreOutlined, FilePdfOutlined, FileExcelOutlined, FileTextOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, RollbackOutlined, HistoryOutlined } from '@ant-design/icons';
 import axiosInstance from '../api/axiosInstance';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -37,12 +37,15 @@ const PersonelListesi = () => {
     const [ekstrePersonel, setEkstrePersonel] = useState(null);
     const [ekstreLoading, setEkstreLoading] = useState(false);
 
+    // YENİ STATE'LER (Geçmiş Puantajlar İçin)
+    const [isPuantajArsivVisible, setIsPuantajArsivVisible] = useState(false);
+    const [puantajArsivData, setPuantajArsivData] = useState([]);
+    const [puantajArsivLoading, setPuantajArsivLoading] = useState(false);
+
     useEffect(() => {
         fetchData();
     }, []);
 
-    // 🚀 DÜZELTME: Ekrandaki tüm paraların daha ince gösterimi için yardımcı fonksiyon
-    // Bu fonksiyon virgülden sonra en az 2, veride varsa 4 haneye kadar gösterir.
     const formatMoney = (amount) => {
         return Number(amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
     };
@@ -306,6 +309,55 @@ const PersonelListesi = () => {
         doc.save(`${isim}_Ekstre.pdf`);
     };
 
+    // --- YENİ EKLENEN: GEÇMİŞ PUANTAJLARI YÖNETME ---
+    const fetchGecmisPuantajlar = async () => {
+        setIsPuantajArsivVisible(true);
+        setPuantajArsivLoading(true);
+        try {
+            const res = await axiosInstance.get('/attendance/archives');
+            setPuantajArsivData(res.data);
+        } catch (error) {
+            message.error("Arşiv alınamadı!");
+        } finally {
+            setPuantajArsivLoading(false);
+        }
+    };
+
+    const handleArsivSil = async (aciklama) => {
+        try {
+            await axiosInstance.post('/attendance/archives/delete', { aciklama });
+            message.success("Puantaj iptal edildi ve bakiyeler güncellendi!");
+            fetchGecmisPuantajlar(); // Arşiv listesini yenile
+            fetchData(); // Ana sayfadaki bakiyeleri yenile
+        } catch (error) {
+            message.error(error.response?.data?.mesaj || "Silme işlemi başarısız!");
+        }
+    };
+
+    const arsivColumns = [
+        { title: 'Tarih', dataIndex: 'tarih', render: val => dayjs(val).format('DD.MM.YYYY') },
+        { title: 'Excel Açıklaması', dataIndex: '_id', width: 350 },
+        { title: 'İşlem Gören Kişi', dataIndex: 'kisiSayisi', align: 'center', render: val => <Tag color="blue">{val} Kişi</Tag> },
+        { title: 'Toplam Hakediş Tutarı', dataIndex: 'toplamTutar', align: 'right', render: val => <b style={{ color: '#52c41a' }}>{formatMoney(val)} ₺</b> },
+        {
+            title: 'İşlem',
+            key: 'action',
+            align: 'center',
+            render: (_, record) => (
+                <Popconfirm
+                    title="Bu puantajı tamamen silmek üzeresiniz."
+                    description="Bu excel ile eklenen TÜM BAKİYELER personellerden GERİ ALINACAKTIR. Emin misiniz?"
+                    onConfirm={() => handleArsivSil(record._id)}
+                    okText="Evet, İptal Et"
+                    cancelText="Hayır"
+                >
+                    <Button type="primary" danger size="small" icon={<DeleteOutlined />}>Geri Al</Button>
+                </Popconfirm>
+            )
+        }
+    ];
+    // ------------------------------------------------
+
     const ekstreColumns = [
         { title: 'Tarih', key: 'tarih', dataIndex: 'islemTarihi', width: 130, render: val => dayjs(val).format('DD.MM.YYYY HH:mm') },
         { title: 'Evrak Cinsi', key: 'evrakCinsi', dataIndex: 'islemTipi', width: 150, render: val => <b>{val === 'Hakediş' ? 'Personel Tahakkuku' : (val === 'Ödeme' ? 'Kasa Tediye Fişi' : val)}</b> },
@@ -433,6 +485,10 @@ const PersonelListesi = () => {
                                 {selectedRowKeys.length} Kişiye Öde
                             </Button>
                         )}
+                        {/* 🚀 EKLENEN YENİ BUTON */}
+                        <Button type="default" icon={<HistoryOutlined />} onClick={fetchGecmisPuantajlar}>
+                            Geçmiş Puantajları Yönet
+                        </Button>
                         <Button type="primary" icon={<PlusOutlined />} onClick={() => {
                             setEditingEmployee(null);
                             form.resetFields();
@@ -468,11 +524,35 @@ const PersonelListesi = () => {
                         </Select>
                     </Form.Item>
                     <Form.Item name="ucretMiktari" label="Birim Ücreti (₺)" rules={[{ required: true }]}>
-                        {/* 🚀 DÜZELTME: step eklendi, böylece ondalıklı girişler sağlanıyor */}
                         <InputNumber style={{ width: '100%' }} size="large" step={0.01} />
                     </Form.Item>
                     <Form.Item name="telefon" label="Telefon"><Input /></Form.Item>
                 </Form>
+            </Modal>
+
+            {/* 🚀 EKLENEN YENİ MODAL (Geçmiş Puantajlar) */}
+            <Modal
+                title={<span><HistoryOutlined /> Geçmiş Puantaj Arşivi</span>}
+                open={isPuantajArsivVisible}
+                onCancel={() => setIsPuantajArsivVisible(false)}
+                footer={null}
+                width={850}
+                destroyOnHidden
+            >
+                <Alert
+                    message="Dikkat: Bir puantajı geri aldığınızda (İptal Et), o puantaj ile personellere eklenen TÜM BAKİYELER sıfırlanıp eski haline döner."
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 15 }}
+                />
+                <Table
+                    columns={arsivColumns}
+                    dataSource={puantajArsivData}
+                    rowKey="_id"
+                    loading={puantajArsivLoading}
+                    pagination={{ pageSize: 5 }}
+                    size="small"
+                />
             </Modal>
 
             <Modal title={<><WalletOutlined style={{ color: '#cf1322' }} /> Personele Ödeme Yap</>} open={isPayModalVisible} onCancel={() => setIsPayModalVisible(false)} onOk={handlePayment} okText="Ödemeyi Tamamla" cancelText="Vazgeç" okButtonProps={{ danger: true }} destroyOnHidden>

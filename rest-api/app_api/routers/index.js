@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const yetkiKontrolu = require('../middleware/authMiddleware'); // Middleware'i bağladık
+const yetkiKontrolu = require('../middleware/authMiddleware');
 
-// Controller'ların... (Aynen kalsın)
 const ctrlPersonel = require('../controllers/personelController');
 const ctrlMesai = require('../controllers/mesaiController');
 const ctrlAuth = require('../controllers/authController');
@@ -15,12 +14,11 @@ const ctrlTahmin = require('../controllers/tahminController');
 const ctrlPuantaj = require('../controllers/puantajController');
 const ctrlStats = require('../controllers/statsController');
 
-// 🔐 GİRİŞ ROTALARI (Herkese Açık - Koruma yok)
-//router.post('/kayit', ctrlAuth.kayitOl);
+// 🔐 GİRİŞ ROTALARI
 router.post('/auth/login', ctrlAuth.girisYap);
-router.post('/auth/logout', ctrlAuth.cikisYap); // Çıkış rotasını da ekledik
+router.post('/auth/logout', ctrlAuth.cikisYap);
 
-// 🛡️ GÜVENLİK KİLİDİ (Aşağıdaki tüm rotalar korumalıdır)
+// 🛡️ GÜVENLİK KİLİDİ
 router.use(yetkiKontrolu);
 
 // 👥 PERSONEL ROTALARI
@@ -36,9 +34,12 @@ router.post('/employees/:employeeId/refund', ctrlPersonel.personelTahsilatYap);
 
 // 🕒 MESAİ VE PUANTAJ ROTALARI
 router.post('/attendance/upload', ctrlPuantaj.puantajYukle);
-router.post('/payroll/:employeeId/calculate', ctrlMesai.hakedisHesapla);
 router.get('/attendance/settings', ctrlPuantaj.ayarlarıGetir);
 router.post('/attendance/settings', ctrlPuantaj.ayarlarıGuncelle);
+router.get('/attendance/archives', ctrlPuantaj.gecmisPuantajlariGetir); // YENİ
+router.post('/attendance/archives/delete', ctrlPuantaj.puantajArsivSil); // YENİ
+
+router.post('/payroll/:employeeId/calculate', ctrlMesai.hakedisHesapla);
 router.get('/mesai/haftalik-analiz', ctrlMesai.haftalikAnalizGetir);
 router.post('/mesai/toplu-odeme', ctrlMesai.topluOdemeYap);
 router.get('/mesai/gecmis-odemeler', ctrlMesai.gecmisOdemeleriGetir);

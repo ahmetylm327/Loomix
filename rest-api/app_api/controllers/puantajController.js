@@ -353,4 +353,63 @@ const ayarlarıGetir = async (req, res) => {
     } catch (e) { res.status(500).json({ mesaj: "Ayarlar çekilemedi" }); }
 };
 
-module.exports = { puantajYukle, ayarlarıGuncelle, ayarlarıGetir };
+// --------- EKLENECEK KISIM (module.exports'un hemen üstüne) ---------
+
+// 6. GEÇMİŞ PUANTAJLARI (HAKEDİŞLERİ) GRUPLAYARAK GETİR
+const gecmisPuantajlariGetir = async (req, res) => {
+    try {
+        const paketler = await PersonelHareket.aggregate([
+            // Sadece "Hakediş" olanları ve açıklamasında "Tarihleri Arası" veya "Otomatik Puantaj" geçenleri al
+            { $match: { islemTipi: 'Hakediş', aciklama: { $regex: /Tarihleri Arası|Otomatik Puantaj/i } } },
+            { $group: { 
+                _id: "$aciklama", 
+                toplamTutar: { $sum: { $abs: "$tutar" } }, 
+                kisiSayisi: { $sum: 1 }, 
+                tarih: { $first: "$islemTarihi" } 
+            }},
+            { $sort: { tarih: -1 } }
+        ]);
+        res.status(200).json(paketler);
+    } catch (e) { 
+        res.status(500).json({ mesaj: "Arşiv alınamadı" }); 
+    }
+};
+
+// 7. PUANTAJ ARŞİVİNİ SİL VE BAKİYELERİ GERİ AL
+const puantajArsivSil = async (req, res) => {
+    try {
+        const { aciklama } = req.body;
+        if(!aciklama) return res.status(400).json({ mesaj: "Açıklama belirtilmedi." });
+
+        // Önce silinecek hareketleri bul (Hakediş ve spesifik açıklama)
+        const hareketler = await PersonelHareket.find({ islemTipi: 'Hakediş', aciklama: aciklama });
+
+        if(hareketler.length === 0) {
+            return res.status(404).json({ mesaj: "Silinecek kayıt bulunamadı." });
+        }
+
+        // Her bir personelin bakiyesini, eklenen tahakkuk kadar GERİ DÜŞ
+        for (const hareket of hareketler) {
+            await Personel.findByIdAndUpdate(hareket.personelId, {
+                $inc: { bakiye: -hareket.tutar } // Eklenen tutarı çıkarıyoruz
+            });
+        }
+
+        // Bakiyeler düştükten sonra hareket kayıtlarını tamamen sil
+        await PersonelHareket.deleteMany({ islemTipi: 'Hakediş', aciklama: aciklama });
+
+        res.status(200).json({ mesaj: "Puantaj işlemi başarıyla geri alındı ve personellerin bakiyesi düzeltildi." });
+    } catch (e) { 
+        res.status(500).json({ detay: e.message, mesaj: "Silme başarısız." }); 
+    }
+};
+
+// YENİ MODULE.EXPORTS KISMIN (Bununla değiştir)
+module.exports = { 
+    puantajYukle, 
+    ayarlarıGuncelle, 
+    ayarlarıGetir, 
+    gecmisPuantajlariGetir, 
+    puantajArsivSil 
+};
+
