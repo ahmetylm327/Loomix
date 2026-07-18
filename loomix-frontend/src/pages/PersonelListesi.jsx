@@ -486,7 +486,7 @@ const PersonelListesi = () => {
                                 {selectedRowKeys.length} Kişiye Öde
                             </Button>
                         )}
-                        {/* 🚀 YENİ EKLENEN BOZUK BAKİYE ONAR BUTONU */}
+                        {/* 🚀 YENİ EKLENEN BOZUK BAKİYE ONAR BUTONU
                         <Button 
                             type="dashed" 
                             danger 
@@ -513,7 +513,7 @@ const PersonelListesi = () => {
                             setIsModalVisible(true);
                         }}>
                             Yeni Ekle
-                        </Button>
+                        </Button> */}
                     </Space>
                 </div>
 
